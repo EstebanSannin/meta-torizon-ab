@@ -10,12 +10,14 @@ inherit swupdate
 
 SRC_URI = "file://sw-description"
 
-# The rootfs image whose .ext4.gz becomes the SWUpdate payload.
+# Build the rootfs image before packing the .swu.
+IMAGE_DEPENDS = "torizon-docker-ab"
+
+# The rootfs image whose .ext4.gz becomes the SWUpdate payload. Copied into the
+# .swu under its machine-suffixed deploy basename; sw-description references it
+# via the @@MACHINE@@ placeholder.
 SWUPDATE_IMAGES = "torizon-docker-ab"
 SWUPDATE_IMAGES_FSTYPES[torizon-docker-ab] = ".ext4.gz"
-
-# Stable, machine-independent payload filename referenced by sw-description.
-SWUPDATE_IMAGES_NOAPPEND_MACHINE = "1"
 
 # REVIEW: to produce a signed .swu, set SWUPDATE_SIGNING and provide keys.
 # SWUPDATE_SIGNING = "RSA"

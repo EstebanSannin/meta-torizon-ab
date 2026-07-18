@@ -10,13 +10,15 @@ inherit swupdate
 
 SRC_URI = "file://sw-description"
 
-# The rootfs image whose .ext4.gz becomes the SWUpdate payload.
+# Build the rootfs image before packing the .swu.
+IMAGE_DEPENDS = "torizon-minimal-ab"
+
+# The rootfs image whose .ext4.gz becomes the SWUpdate payload. The class copies
+# it into the .swu under its deploy basename, which includes the machine suffix
+# (torizon-minimal-ab-<machine>.ext4.gz) — the sw-description references it via
+# the @@MACHINE@@ placeholder that meta-swupdate expands.
 SWUPDATE_IMAGES = "torizon-minimal-ab"
 SWUPDATE_IMAGES_FSTYPES[torizon-minimal-ab] = ".ext4.gz"
-
-# Keep a stable, machine-independent payload filename so the sw-description can
-# reference it directly (rootfs artifact = torizon-minimal-ab.ext4.gz).
-SWUPDATE_IMAGES_NOAPPEND_MACHINE = "1"
 
 # REVIEW: to produce a signed .swu (recommended in addition to aktualizr's
 # Uptane signature), set SWUPDATE_SIGNING and provide keys per meta-swupdate.
