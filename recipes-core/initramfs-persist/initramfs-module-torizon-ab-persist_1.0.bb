@@ -9,11 +9,12 @@ LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda
 SRC_URI = "file://persist"
 
 # initramfs-framework-base provides the module runner + fatal(); kmod provides
-# modprobe for loading the overlay driver in the initramfs.
+# modprobe (used as a harmless no-op if overlayfs is built into the kernel).
 RDEPENDS:${PN} = "initramfs-framework-base kmod"
-# overlay is a kernel module on this kernel (CONFIG_OVERLAY_FS=m); make sure it
-# is present in the initramfs so the /etc overlay can be mounted early.
-RRECOMMENDS:${PN} = "kernel-module-overlay"
+# NOTE: overlayfs must be available in the kernel. On this x86 kernel it is
+# built-in (CONFIG_OVERLAY_FS=y) — there is no kernel-module-overlay package.
+# If you retarget to a kernel where it is a module, add that module to the
+# initramfs image and it will be modprobe'd by the persist script.
 
 inherit allarch
 
