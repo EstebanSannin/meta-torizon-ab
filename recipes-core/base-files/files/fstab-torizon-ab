@@ -1,0 +1,9 @@
+# /etc/fstab for Torizon OS A/B (no OSTree). Mounts by label so both rootfs
+# slots share one fstab. Root itself is mounted by the kernel via
+# root=LABEL=otaroot_a|otaroot_b (set by GRUB), so it has no entry here.
+#
+# <file system>        <mount pt>   <type>  <options>              <dump> <pass>
+LABEL=efi              /boot/efi    vfat    defaults,noatime         0      2
+LABEL=data             /var         ext4    defaults,noatime         0      2
+proc                   /proc        proc    defaults                 0      0
+tmpfs                  /tmp         tmpfs   defaults                 0      0

@@ -1,0 +1,41 @@
+/*
+ * SWUpdate description for Torizon OS A/B rootfs (Docker variant).
+ *
+ * Same A/B slot selection as the minimal variant; only the payload differs.
+ *   stable,slot_a -> raw-write the rootfs to /dev/disk/by-label/otaroot_a
+ *   stable,slot_b -> raw-write the rootfs to /dev/disk/by-label/otaroot_b
+ *
+ * /usr/bin/swupdate_actions.sh picks the selection for the INACTIVE slot:
+ *   swupdate -i rootfs.swu -e stable,slot_b
+ */
+software =
+{
+    /* REVIEW: bump per release, or template this from DISTRO_VERSION. */
+    version = "1.0";
+
+    stable = {
+        slot_a = {
+            images: (
+                {
+                    filename = "torizon-docker-ab.ext4.gz";
+                    device = "/dev/disk/by-label/otaroot_a";
+                    compressed = "zlib";
+                    installed-directly = true;
+                    sha256 = "@torizon-docker-ab.ext4.gz";
+                }
+            );
+        };
+
+        slot_b = {
+            images: (
+                {
+                    filename = "torizon-docker-ab.ext4.gz";
+                    device = "/dev/disk/by-label/otaroot_b";
+                    compressed = "zlib";
+                    installed-directly = true;
+                    sha256 = "@torizon-docker-ab.ext4.gz";
+                }
+            );
+        };
+    };
+};

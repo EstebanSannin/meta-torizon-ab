@@ -1,0 +1,4 @@
+# Primary package manager: download + Uptane-verify only, no installation.
+# The OS rootfs is applied by SWUpdate via the rootfs generic secondary.
+[pacman]
+type = "none"

@@ -1,0 +1,17 @@
+# short-description: Torizon OS A/B (dual rootfs) + SWUpdate EFI disk image
+# long-description:
+#   GPT layout for a classic A/B update scheme (no OSTree):
+#     p1 /boot  vfat  label=efi        - GRUB EFI + grub.cfg + grubenv (shared)
+#     p2 /      ext4  label=otaroot_a  - rootfs slot A (factory), kernel in /boot
+#     p3        ext4  label=otaroot_b  - rootfs slot B (empty at flash)
+#     p4 /var   ext4  label=data       - shared persistent data
+#
+# REVIEW: slot sizes are fixed and must be equal and large enough to hold a full
+# rootfs update. Tune to your rootfs size (default 2 GiB per slot).
+
+part /boot/efi --source bootimg-efi --sourceparams="loader=grub-efi" --ondisk sda --label efi --active --align 1024 --fixed-size 128
+part /     --source rootfs      --ondisk sda --fstype=ext4 --label otaroot_a --align 1024 --fixed-size 2048
+part       --ondisk sda --fstype=ext4 --label otaroot_b --align 1024 --fixed-size 2048
+part /var  --ondisk sda --fstype=ext4 --label data       --align 1024 --fixed-size 1024
+
+bootloader --ptable gpt --timeout=3 --configfile="grub.cfg"

@@ -1,0 +1,45 @@
+/*
+ * SWUpdate description for Torizon OS A/B rootfs.
+ *
+ * Two install selections (modes):
+ *   stable,slot_a -> raw-write the rootfs to /dev/disk/by-label/otaroot_a
+ *   stable,slot_b -> raw-write the rootfs to /dev/disk/by-label/otaroot_b
+ *
+ * /usr/bin/swupdate_actions.sh picks the selection matching the INACTIVE slot,
+ * e.g.:  swupdate -i rootfs.swu -e stable,slot_b
+ *
+ * The payload is the full rootfs ext4 image (kernel + initramfs bundled inside
+ * /boot of the rootfs), so a single raw write updates userspace and kernel
+ * atomically for that slot.
+ */
+software =
+{
+    /* REVIEW: bump per release, or template this from DISTRO_VERSION. */
+    version = "1.0";
+
+    stable = {
+        slot_a = {
+            images: (
+                {
+                    filename = "torizon-minimal-ab.ext4.gz";
+                    device = "/dev/disk/by-label/otaroot_a";
+                    compressed = "zlib";
+                    installed-directly = true;
+                    sha256 = "@torizon-minimal-ab.ext4.gz";
+                }
+            );
+        };
+
+        slot_b = {
+            images: (
+                {
+                    filename = "torizon-minimal-ab.ext4.gz";
+                    device = "/dev/disk/by-label/otaroot_b";
+                    compressed = "zlib";
+                    installed-directly = true;
+                    sha256 = "@torizon-minimal-ab.ext4.gz";
+                }
+            );
+        };
+    };
+};
