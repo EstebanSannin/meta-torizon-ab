@@ -9,9 +9,12 @@
 # REVIEW: slot sizes are fixed and must be equal and large enough to hold a full
 # rootfs update. Tune to your rootfs size (default 2 GiB per slot).
 
-part /boot/efi --source bootimg-efi --sourceparams="loader=grub-efi" --ondisk sda --label efi --active --align 1024 --fixed-size 128
-part /     --source rootfs      --ondisk sda --fstype=ext4 --label otaroot_a --align 1024 --fixed-size 2048
+# --no-fstab-update: we ship a static /etc/fstab (base-files bbappend) so that
+# .swu-delivered slots self-contain their mounts; without this wic would ALSO
+# add /boot/efi and /var entries, causing duplicate-fstab warnings.
+part /boot/efi --source bootimg-efi --sourceparams="loader=grub-efi" --ondisk sda --label efi --active --align 1024 --fixed-size 128 --no-fstab-update
+part /     --source rootfs      --ondisk sda --fstype=ext4 --label otaroot_a --align 1024 --fixed-size 2048 --no-fstab-update
 part       --ondisk sda --fstype=ext4 --label otaroot_b --align 1024 --fixed-size 2048
-part /var  --ondisk sda --fstype=ext4 --label data       --align 1024 --fixed-size 1024
+part /var  --ondisk sda --fstype=ext4 --label data       --align 1024 --fixed-size 1024 --no-fstab-update
 
 bootloader --ptable gpt --timeout=3 --configfile="grub.cfg"

@@ -101,6 +101,7 @@ CORE_IMAGE_BASE_INSTALL:append = " \
     aktualizr-pacman-none \
     swupdate \
     grub-ab \
+    torizon-ab-slots-udev \
 "
 
 # The rootfs subsystem secondary + swupdate_actions.sh handler are added to the

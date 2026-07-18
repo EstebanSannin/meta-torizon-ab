@@ -125,6 +125,15 @@ do_install() {
     log "Inactive slot: $inactive (index $idx_new), swupdate mode=$mode"
     log "Payload:       $SECONDARY_FIRMWARE_PATH"
 
+    # Defensive: make sure the inactive slot is NOT mounted before SWUpdate
+    # raw-writes it (a udev rule keeps the automounter off it, but belt &
+    # suspenders in case something mounted it).
+    local inactive_dev="/dev/disk/by-label/${inactive}"
+    if findmnt -rn -S "$inactive_dev" >/dev/null 2>&1; then
+        log "Inactive slot $inactive is mounted; unmounting before write"
+        maybe_run umount "$inactive_dev" || die "Could not unmount $inactive before write"
+    fi
+
     # Write the .swu into the inactive slot. The sw-description inside the .swu
     # maps mode slot_a -> /dev/disk/by-label/otaroot_a and slot_b -> ...b.
     maybe_run SWUPDATE -v -i "$SECONDARY_FIRMWARE_PATH" -e "stable,$mode" \

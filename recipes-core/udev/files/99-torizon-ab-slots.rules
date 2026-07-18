@@ -1,0 +1,6 @@
+# Keep the A/B rootfs slots out of the automounter (usermount/udisks2).
+# SWUpdate raw-writes the inactive slot via /dev/disk/by-label/otaroot_*, so
+# neither slot may be auto-mounted under /media. The active slot is mounted as
+# / by the kernel; the inactive slot must stay unmounted.
+SUBSYSTEM=="block", ENV{ID_FS_LABEL}=="otaroot_a", ENV{UDISKS_IGNORE}="1"
+SUBSYSTEM=="block", ENV{ID_FS_LABEL}=="otaroot_b", ENV{UDISKS_IGNORE}="1"
