@@ -46,6 +46,7 @@ ROOTFS_POSTPROCESS_COMMAND += "install_initramfs_to_boot;"
 CORE_IMAGE_BASE_INSTALL:append = " \
     cpupower \
     curl \
+    e2fsprogs-tune2fs \
     ethtool \
     evtest \
     fastfetch \

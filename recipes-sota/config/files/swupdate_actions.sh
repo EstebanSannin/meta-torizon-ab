@@ -48,6 +48,10 @@ req_program "/usr/bin/lsblk"        && alias LSBLK="$_"
 req_program "/usr/bin/findmnt"      && alias FINDMNT="$_"
 req_program "/usr/bin/swupdate"     && alias SWUPDATE="$_"
 req_program "/usr/bin/touch"        && alias TOUCH="$_"
+# Required by common_actions.sh (get_file_sha256 uses the SED alias but does not
+# define it — the sourcing script must, like bl_actions.sh does).
+req_program "/usr/bin/sed"          && alias SED="$_"
+req_program "/usr/sbin/e2label"     && alias E2LABEL="$_"
 
 maybe_run() {
     if [ "$DRY_RUN" = "1" ]; then
@@ -111,7 +115,11 @@ do_get_firmware_info() {
 do_install() {
     before_dying 'on_install_failed'
     check_install_vars
-    check_target_sha256
+    # NOTE: no check_target_sha256 here. aktualizr already Uptane-verifies the
+    # downloaded target before calling this action, and SWUpdate independently
+    # verifies the sha256 of the payload inside the .swu (see sw-description).
+    # SECONDARY_FIRMWARE_SHA256 is the Uptane-metadata hash, not the plain sha
+    # of the stored .swu.new, so re-hashing here only produces false mismatches.
 
     local active inactive mode idx_new idx_old
     active=$(get_active_label)
@@ -125,10 +133,19 @@ do_install() {
     log "Inactive slot: $inactive (index $idx_new), swupdate mode=$mode"
     log "Payload:       $SECONDARY_FIRMWARE_PATH"
 
+    # Resolve the inactive slot's real block device NOW, while its ext4 label
+    # still exists. SWUpdate raw-writes the rootfs image onto the slot, which
+    # replaces the slot's ext4 label with the image's label, so /dev/disk/by-
+    # label/${inactive} disappears after the write. We keep the resolved device
+    # to (a) unmount it and (b) restore the label afterwards.
+    local inactive_dev
+    inactive_dev="$(readlink -f "/dev/disk/by-label/${inactive}" 2>/dev/null || true)"
+    [ -b "$inactive_dev" ] || die "Cannot resolve device for inactive slot $inactive"
+    log "Inactive slot device: $inactive_dev"
+
     # Defensive: make sure the inactive slot is NOT mounted before SWUpdate
-    # raw-writes it (a udev rule keeps the automounter off it, but belt &
+    # raw-writes it (a udev/ignorelist keeps the automounter off it, but belt &
     # suspenders in case something mounted it).
-    local inactive_dev="/dev/disk/by-label/${inactive}"
     if findmnt -rn -S "$inactive_dev" >/dev/null 2>&1; then
         log "Inactive slot $inactive is mounted; unmounting before write"
         maybe_run umount "$inactive_dev" || die "Could not unmount $inactive before write"
@@ -138,6 +155,12 @@ do_install() {
     # maps mode slot_a -> /dev/disk/by-label/otaroot_a and slot_b -> ...b.
     maybe_run SWUPDATE -v -i "$SECONDARY_FIRMWARE_PATH" -e "stable,$mode" \
         || die "SWUpdate failed writing slot $inactive"
+
+    # Restore the ext4 label the raw write clobbered, so GRUB (search --label)
+    # and the kernel (root=LABEL=) can find this slot again — and so the next
+    # update can still resolve /dev/disk/by-label/${inactive}.
+    maybe_run E2LABEL "$inactive_dev" "$inactive" \
+        || die "Could not restore ext4 label $inactive on $inactive_dev"
 
     # Point GRUB at the freshly-flashed slot on trial.
     maybe_run GRUBEDITENV "$GRUBENV" set \
