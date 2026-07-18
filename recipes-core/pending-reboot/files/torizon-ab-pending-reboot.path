@@ -1,0 +1,8 @@
+[Unit]
+Description=Torizon A/B update automatic reboot (watch /run/need-reboot)
+
+[Path]
+PathExists=/run/need-reboot
+
+[Install]
+WantedBy=multi-user.target

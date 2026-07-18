@@ -103,6 +103,7 @@ CORE_IMAGE_BASE_INSTALL:append = " \
     swupdate \
     grub-ab \
     torizon-ab-slots-udev \
+    torizon-ab-pending-reboot \
 "
 
 # The rootfs subsystem secondary + swupdate_actions.sh handler are added to the
