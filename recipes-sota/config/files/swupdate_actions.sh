@@ -58,7 +58,10 @@ maybe_run() {
         log "WOULD RUN:" "$@"; return 0
     fi
     log "RUN:" "$@"
-    eval "$@"
+    # Redirect command output to the log. The action handler's stdout must
+    # contain ONLY the final JSON status (aktualizr parses stdout as JSON);
+    # swupdate -v in particular is very chatty and would corrupt it.
+    eval "$@" >>"${LOG_FILE}" 2>&1
 }
 
 # --- Slot helpers ------------------------------------------------------------

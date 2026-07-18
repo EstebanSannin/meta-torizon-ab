@@ -25,7 +25,6 @@ software =
                     device = "/dev/disk/by-label/otaroot_a";
                     compressed = "zlib";
                     installed-directly = true;
-                    sha256 = "$swupdate_get_sha256(torizon-minimal-ab-@@MACHINE@@.ext4.gz)";
                 }
             );
         };
@@ -37,7 +36,6 @@ software =
                     device = "/dev/disk/by-label/otaroot_b";
                     compressed = "zlib";
                     installed-directly = true;
-                    sha256 = "$swupdate_get_sha256(torizon-minimal-ab-@@MACHINE@@.ext4.gz)";
                 }
             );
         };
