@@ -22,10 +22,11 @@ SPLASH = "plymouth"
 
 # The kernel + initramfs live INSIDE each rootfs slot (/boot); GRUB loads them
 # from the active slot. Make sure they are installed into the rootfs.
+# (No kernel-devicetree on x86 — there are no DTBs; add it back per-machine for
+#  ARM targets, e.g. CORE_IMAGE_BASE_INSTALL:append:<arm-machine> = " kernel-devicetree".)
 CORE_IMAGE_BASE_INSTALL:append = " \
     kernel-image \
     kernel-modules \
-    kernel-devicetree \
 "
 
 # ---------------------------------------------------------------------------
