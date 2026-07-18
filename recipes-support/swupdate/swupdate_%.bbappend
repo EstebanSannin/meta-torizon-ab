@@ -1,15 +1,10 @@
 # On-target SWUpdate configuration for the Torizon OS A/B variant.
 #
-# Enables the GRUB environment backend so SWUpdate and GRUB share one grubenv,
-# and the handlers needed to raw-write an ext4 rootfs to a slot partition.
-#
-# REVIEW: meta-swupdate builds SWUpdate via kconfig. The fragment below is
-# merged on top of the machine defconfig; confirm the option names against the
-# SWUpdate version pulled by your meta-swupdate (scarthgap). Adjust as needed.
+# SWUpdate in meta-swupdate is configured purely via kconfig fragments (.cfg
+# files in SRC_URI), NOT via PACKAGECONFIG. The fragment selects BOOTLOADER_NONE
+# so SWUpdate does not pull libubootenv (U-Boot env), which is unbuildable on
+# x86. Our A/B slot flip is done by swupdate_actions.sh via grub-editenv.
 
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 
 SRC_URI:append:torizon-ab = " file://torizon-ab.cfg"
-
-# Ensure the bootloader (GRUB) integration is compiled in.
-PACKAGECONFIG:append:torizon-ab = " bootloader-grub"
