@@ -6,7 +6,8 @@ DESCRIPTION = "Torizon OS A/B initramfs image (no OSTree)"
 PACKAGE_INSTALL = "initramfs-framework-base initramfs-module-udev \
     initramfs-module-rootfs initramfs-module-debug \
     initramfs-module-plymouth ${VIRTUAL-RUNTIME_base-utils} base-passwd \
-    initramfs-module-kmod"
+    initramfs-module-kmod \
+    initramfs-module-torizon-ab-persist kernel-module-overlay"
 
 SYSTEMD_DEFAULT_TARGET = "initrd.target"
 

@@ -1,0 +1,69 @@
+#!/bin/sh
+# Torizon A/B persistence module (initramfs-framework).
+#
+# Runs after 90-rootfs (which mounts the active slot at $ROOTFS_DIR) and before
+# 99-finish (switch_root). Sets up, on $ROOTFS_DIR, everything that must survive
+# across A/B rootfs slots — so it becomes part of the new root after switch_root:
+#
+#   * data partition (LABEL=data) mounted at /var         -> shared, persistent
+#   * /etc as an overlay (lower = slot defaults,           -> config/identity edits
+#                         upper/work on the data partition)   persist, new-image
+#                                                              /etc defaults show through
+#   * /home bind-mounted from the data partition           -> user data persists
+#
+# On the very first boot (fresh data partition) the slot's /var and /home
+# defaults are seeded onto the data partition once.
+
+persist_enabled() {
+    return 0
+}
+
+persist_run() {
+    [ -n "$ROOTFS_DIR" ] || return
+
+    DATA_DEV="/dev/disk/by-label/data"
+
+    # The /etc overlay needs the overlay driver (CONFIG_OVERLAY_FS=m on this
+    # kernel); load it now (harmless if built-in / already loaded).
+    modprobe overlay 2>/dev/null || true
+
+    # Wait for the data partition to appear (udev may still be settling).
+    C=0
+    while [ ! -b "$DATA_DEV" ]; do
+        [ $C -ge 10 ] && fatal "persist: data partition $DATA_DEV not found"
+        sleep 1
+        C=$((C + 1))
+    done
+
+    # --- First-boot seeding (once per device, keyed on the data partition) ---
+    mkdir -p /run/persist-seed
+    mount -t ext4 "$DATA_DEV" /run/persist-seed || fatal "persist: cannot mount data for seeding"
+    if [ ! -e /run/persist-seed/.torizon-ab-seeded ]; then
+        # Preserve the factory /var and /home content (otherwise mounting the
+        # empty data partition over /var would hide package-provided defaults).
+        cp -a "$ROOTFS_DIR/var/."  /run/persist-seed/            2>/dev/null || true
+        mkdir -p /run/persist-seed/persist/etc/upper \
+                 /run/persist-seed/persist/etc/work \
+                 /run/persist-seed/persist/home
+        cp -a "$ROOTFS_DIR/home/." /run/persist-seed/persist/home/ 2>/dev/null || true
+        touch /run/persist-seed/.torizon-ab-seeded
+    fi
+    # Make sure the persistence dirs exist even on already-seeded devices.
+    mkdir -p /run/persist-seed/persist/etc/upper \
+             /run/persist-seed/persist/etc/work \
+             /run/persist-seed/persist/home
+    umount /run/persist-seed
+    rmdir  /run/persist-seed 2>/dev/null || true
+
+    # --- Mount persistent storage onto the new root ---
+    mount -t ext4 "$DATA_DEV" "$ROOTFS_DIR/var" \
+        || fatal "persist: cannot mount data at /var"
+
+    mount -t overlay overlay \
+        -o "lowerdir=$ROOTFS_DIR/etc,upperdir=$ROOTFS_DIR/var/persist/etc/upper,workdir=$ROOTFS_DIR/var/persist/etc/work" \
+        "$ROOTFS_DIR/etc" \
+        || fatal "persist: cannot set up /etc overlay"
+
+    mount --bind "$ROOTFS_DIR/var/persist/home" "$ROOTFS_DIR/home" \
+        || fatal "persist: cannot bind /home"
+}

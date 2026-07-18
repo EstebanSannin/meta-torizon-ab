@@ -2,8 +2,11 @@
 # slots share one fstab. Root itself is mounted by the kernel via
 # root=LABEL=otaroot_a|otaroot_b (set by GRUB), so it has no entry here.
 #
+# NOTE: /var (the shared data partition), the /etc overlay, and /home are set
+# up in the initramfs (initramfs-module-torizon-ab-persist) BEFORE switch_root,
+# so they are intentionally NOT listed here — the initramfs owns them.
+#
 # <file system>        <mount pt>   <type>  <options>              <dump> <pass>
 LABEL=efi              /boot/efi    vfat    defaults,noatime         0      2
-LABEL=data             /var         ext4    defaults,noatime         0      2
 proc                   /proc        proc    defaults                 0      0
 tmpfs                  /tmp         tmpfs   defaults                 0      0
