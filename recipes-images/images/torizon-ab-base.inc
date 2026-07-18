@@ -29,6 +29,16 @@ CORE_IMAGE_BASE_INSTALL:append = " \
     kernel-modules \
 "
 
+# Install the initramfs alongside the kernel in each rootfs slot's /boot so GRUB
+# can load it (root=LABEL= is resolved by the initramfs, not the kernel). Kept
+# per-slot so a rootfs update ships a matching kernel+initramfs atomically.
+do_rootfs[depends] += "${INITRAMFS_IMAGE}:do_image_complete"
+install_initramfs_to_boot () {
+    install -m 0644 "${DEPLOY_DIR_IMAGE}/${INITRAMFS_IMAGE}-${MACHINE}.cpio.gz" \
+        "${IMAGE_ROOTFS}/boot/initramfs"
+}
+ROOTFS_POSTPROCESS_COMMAND += "install_initramfs_to_boot;"
+
 # ---------------------------------------------------------------------------
 # Base packages (mirrors torizon-base.inc, minus OSTree-only items:
 # ostree-customize-plymouth, ostree-devicetree-overlays, resize-helper).
