@@ -1,0 +1,23 @@
+#!/bin/sh
+# Add the A/B rootfs slot device nodes to usermount's ignore list so the
+# automounter never mounts them (SWUpdate raw-writes the inactive slot).
+# Runs at boot before usermount; resolves labels to device nodes each time so
+# it adapts to sda/vda/nvme and to whichever slot is active.
+set -eu
+
+LIST="/etc/usermount/ignorelist"
+
+# Make sure the by-label symlinks exist.
+command -v udevadm >/dev/null 2>&1 && udevadm settle || true
+
+mkdir -p /etc/usermount
+touch "$LIST"
+
+for label in otaroot_a otaroot_b; do
+    dev="$(readlink -f "/dev/disk/by-label/${label}" 2>/dev/null || true)"
+    if [ -n "${dev}" ] && ! grep -xqs "${dev}" "$LIST"; then
+        echo "${dev}" >> "$LIST"
+    fi
+done
+
+exit 0

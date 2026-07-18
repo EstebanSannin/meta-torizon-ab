@@ -1,0 +1,12 @@
+[Unit]
+Description=Exclude A/B rootfs slots from the usermount automounter
+After=local-fs.target systemd-udevd.service
+Before=usermount.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/torizon-ab-slot-ignorelist
+
+[Install]
+WantedBy=multi-user.target
