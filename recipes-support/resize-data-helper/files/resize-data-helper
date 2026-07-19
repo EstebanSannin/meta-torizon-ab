@@ -1,0 +1,67 @@
+#!/bin/sh
+# Grow the A/B data partition (LABEL=data, the last partition) to fill the whole
+# storage medium, then grow its ext4 filesystem. Runs once on first boot; safe
+# and idempotent (no-op when there is no free space, e.g. under QEMU where the
+# disk equals the image). Adapted from Toradex's resize-helper, retargeted from
+# '/' to the data partition and made run-once via a flag on the data partition.
+#
+# The data partition is mounted at /var (by the initramfs), so the ext4 grow is
+# an online resize. Growing the last GPT partition on the live boot disk is the
+# same operation cloud-init/growpart perform routinely.
+set -e
+set -o pipefail
+
+[ "$(id -u)" = "0" ] || { echo "E: must be root"; exit 1; }
+
+FLAG="/var/.torizon-ab-data-resized"
+[ -e "$FLAG" ] && { echo "data partition already resized; nothing to do"; exit 0; }
+
+SGDISK=$(command -v sgdisk)
+FDISK=$(command -v fdisk)
+PARTX=$(command -v partx)
+RESIZE2FS=$(command -v resize2fs)
+BLOCKDEV=$(command -v blockdev)
+
+DATA_DEVICE=$(realpath /dev/disk/by-label/data) || { echo "E: no data partition"; exit 1; }
+
+INFO=$(udevadm info --query=property --name="${DATA_DEVICE}")
+PART_ENTRY_NUMBER=$(echo "${INFO}" | sed -ne 's/^ID_PART_ENTRY_NUMBER=//p')
+PART_ENTRY_NAME=$(echo "${INFO}" | sed -ne 's/^ID_PART_ENTRY_NAME=//p')
+PART_TABLE_TYPE=$(echo "${INFO}" | sed -ne 's/^ID_PART_TABLE_TYPE=//p')
+PARTOF=$(echo "${INFO}" | sed -ne 's/^ID_PART_ENTRY_OFFSET=//p')
+
+# Unpartitioned media (unlikely here): just grow the fs.
+if [ -z "${PART_ENTRY_NUMBER}" ]; then
+    "${RESIZE2FS}" "${DATA_DEVICE}"
+    touch "${FLAG}"
+    exit 0
+fi
+
+# Parent block device (e.g. /dev/mmcblk0, /dev/sda, /dev/nvme0n1).
+DEVICE=$(udevadm info --query=path --name="${DATA_DEVICE}" | awk -F'/' '{print $(NF-1)}')
+DEVICE="/dev/${DEVICE}"
+
+SIZE=$("${BLOCKDEV}" --getsz "${DEVICE}")
+TYPE="p\n"
+if [ "${PART_TABLE_TYPE}" = "gpt" ]; then
+    # Relocate the GPT backup header to the real end of the (larger) disk.
+    "${SGDISK}" -e "${DEVICE}"
+    SIZE=$((SIZE - 33))   # leave room for the secondary GPT (34 sectors)
+    TYPE=""
+fi
+END=$((SIZE - 1))
+
+# Delete + recreate the data partition at the same start, extended to the end.
+printf "d\n%s\nn\n%s%s\n%s\n%s\nw\n" \
+    "${PART_ENTRY_NUMBER}" "${TYPE}" "${PART_ENTRY_NUMBER}" "${PARTOF}" "${END}" \
+    | "${FDISK}" "${DEVICE}"
+
+# Restore the GPT partition name (fdisk recreation drops it).
+[ -n "${PART_ENTRY_NAME}" ] && \
+    "${SGDISK}" --change-name="${PART_ENTRY_NUMBER}":"${PART_ENTRY_NAME}" "${DEVICE}"
+
+"${PARTX}" -u "${DEVICE}"
+"${RESIZE2FS}" "${DATA_DEVICE}"
+
+touch "${FLAG}"
+echo "data partition grown to fill the medium"

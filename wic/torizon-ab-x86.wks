@@ -16,10 +16,14 @@
 # Check the actual image size with:
 #   ls -l tmp/deploy/images/<machine>/torizon-minimal-ab-<machine>.ext4
 #
-# The /var (data) partition must be big enough to hold the downloaded .swu
-# (aktualizr stores it under /var/sota before applying) PLUS persistent data
-# (and /var/lib/docker for the docker variant). The ~800 MB rootfs .swu needs
-# well more than 1 GiB here, so /var is 4 GiB. Tune to your update size.
+# The /var (data) partition is the LAST partition and AUTO-EXPANDS to fill the
+# whole storage medium on first boot (resize-data-helper) — on real hardware
+# (eMMC/SD/NVMe) it grows to use all remaining space. The size below is only the
+# baked minimum in the .wic; it must still hold the downloaded .swu
+# (~/var/sota, ~800 MB+) plus persistent data / docker until the first-boot
+# expand runs. For a smaller flashable image, reduce it (the expand fills the
+# rest). Under QEMU the disk equals the image, so there is nothing to expand
+# into unless you enlarge the disk (e.g. qemu-img resize / a bigger raw disk).
 
 # --no-fstab-update: we ship a static /etc/fstab (base-files bbappend) so that
 # .swu-delivered slots self-contain their mounts; without this wic would ALSO

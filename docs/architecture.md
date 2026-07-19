@@ -55,10 +55,20 @@ See `wic/torizon-ab-x86.wks`.
 
 Slots must be **larger than the decompressed rootfs ext4 image** (not the
 compressed `.swu`), which is sized by `IMAGE_OVERHEAD_FACTOR` (~1.5×). Current
-slots are 4 GiB; the data partition is 4 GiB (must hold the downloaded `.swu`
-plus persistent data / docker). For production, shrink the rootfs image
+slots are 4 GiB. For production, shrink the rootfs image
 (`IMAGE_OVERHEAD_FACTOR=1` / fixed `IMAGE_ROOTFS_SIZE`) so slots and the `.swu`
 can be smaller.
+
+**Data partition auto-expand.** The `data` partition is the **last** partition
+and its size in the `.wks` is only a baked minimum. On first boot,
+`resize-data-helper` (`recipes-support/resize-data-helper`) relocates the GPT
+backup header, grows the last partition to fill the whole medium
+(eMMC/SD/NVMe/disk), and `resize2fs`-grows the ext4 — then marks itself done
+with a flag on the data partition so it runs once. This is machine-agnostic
+(the same helper works on Verdin/eMMC). It is idempotent and a no-op where there
+is no free space (e.g. QEMU, where the disk equals the image — enlarge the disk
+to exercise it). `/var` is an online resize since the initramfs has already
+mounted it.
 
 ### Boot + rollback
 GRUB selects the active slot from the shared grubenv (`default`), and rolls back
@@ -93,5 +103,6 @@ recipes-sota/config/aktualizr-default-sec.bbappend  rootfs secondary + handler,
                                                 drop bootloader secondary on x86
 recipes-sota/config/files/swupdate_actions.sh   the A/B action handler
 recipes-support/swupdate/*                      SWUpdate build config
+recipes-support/resize-data-helper/*            grow data partition to fill medium (first boot)
 recipes-support/rollback-test/*                 TEST-ONLY failing greenboot check
 ```

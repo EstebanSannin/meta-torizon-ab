@@ -104,6 +104,7 @@ CORE_IMAGE_BASE_INSTALL:append = " \
     grub-ab \
     torizon-ab-slots-udev \
     torizon-ab-pending-reboot \
+    resize-data-helper \
 "
 
 # The rootfs subsystem secondary + swupdate_actions.sh handler are added to the

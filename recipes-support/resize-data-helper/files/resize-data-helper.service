@@ -1,0 +1,17 @@
+[Unit]
+Description=Expand the A/B data partition to fill the storage medium (first boot)
+Wants=systemd-udevd.service systemd-udev-trigger.service
+After=systemd-remount-fs.service systemd-udevd.service
+# /var is the data partition (mounted by the initramfs); it must be present.
+RequiresMountsFor=/var
+# Run once: the flag lives on the data partition, so it persists across A/B slots.
+ConditionPathExists=!/var/.torizon-ab-data-resized
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=-/bin/udevadm settle
+ExecStart=/usr/sbin/resize-data-helper
+
+[Install]
+WantedBy=basic.target
