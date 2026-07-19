@@ -1,47 +1,48 @@
 # meta-torizon-ab
 
-A Torizon OS variant **without OSTree**, using a classic **A/B dual-partition**
-scheme updated by **SWUpdate**, while keeping the Torizon update stack:
+A Torizon OS variant **without OSTree**, using a classic **A/B dual-rootfs**
+scheme updated by **SWUpdate**, while keeping the Torizon update/cloud stack:
 aktualizr (as a download+verify-only *primary*), Remote Access Client (RAC),
-tzn-mqtt and auto-provisioning. Based on `torizon-minimal` (no container engine).
+tzn-mqtt and auto-provisioning.
 
-Target of this first cut: **x86-64 GRUB/EFI** — works with either
-**`genericx86-64`** (best for QEMU iteration via `runqemu`) or
-**`intel-corei7-64`** (real Intel hardware). Both use the same GRUB/EFI/`bzImage`
-boot path. All partition access is by filesystem **label**, so the disk device
-name (sda / nvme0n1) does not matter at runtime.
+Images: `torizon-minimal-ab` (no container engine) and `torizon-docker-ab`
+(with Docker).
 
-Note: `intel-corei7-64` auto-installs `grub-ota-fallback` (the OSTree GRUB
-rollback package); this layer removes it (it would collide with `grub-ab`).
+First target: **x86-64 GRUB/EFI** — `genericx86-64` (best for QEMU iteration via
+`runqemu`) or `intel-corei7-64` (real Intel hardware).
 
-## How it works
+## Features
 
-- **No `sota` DISTRO_FEATURE** → `sota.bbclass` and the OSTree image pipeline are
-  never pulled in. The distro (`torizon-ab`) re-adds the update stack explicitly.
-- **Partitions** (`wic/torizon-ab-x86.wks`): shared EFI (`efi`), rootfs A
-  (`otaroot_a`), rootfs B (`otaroot_b`), shared data (`data`). Kernel + initramfs
-  are bundled into the kernel image and live inside each rootfs slot's `/boot`.
-- **Boot / rollback** (`wic/grub.cfg` + `grub-ab`): GRUB picks the active slot
-  from a shared `grubenv` (`default`, `bootcount`, `bootlimit`,
-  `upgrade_available`) and rolls back to the other slot after `bootlimit`
-  failed trial boots. greenboot resets the counter on a healthy boot.
-- **Update flow** (Torizon *Subsystem Update* / generic secondary):
-  1. aktualizr primary = `[pacman] type = "none"` (download + Uptane-verify only,
-     via `aktualizr-pacman-none` → `90-pacman.toml`).
-  2. The OS rootfs is a generic secondary `"<machine>-rootfs"` added to
-     `secondaries.json` (`aktualizr-default-sec.bbappend`), whose action handler
-     `/usr/bin/swupdate_actions.sh` runs `swupdate -i rootfs.swu -e stable,slot_X`
-     against the **inactive** slot, flips grubenv, and reboots.
-  3. After reboot, `complete-install` confirms (or reports rollback).
-- The `.swu` is produced by `torizon-ab-swu.bb` (rootfs ext4 + A/B
-  `sw-description`).
+- **No OSTree.** The `torizon-ab` distro does not enable the `sota` feature, so
+  `sota.bbclass` and the OSTree image pipeline are never pulled in; the update
+  stack is re-added explicitly.
+- **A/B rootfs + SWUpdate.** Two rootfs slots (`otaroot_a`/`otaroot_b`), a shared
+  EFI partition, and a shared data partition. Kernel+initramfs live inside each
+  slot, so one `.swu` write updates kernel+userspace atomically.
+- **Torizon-native delivery.** The OS update rides aktualizr's **generic
+  secondary** ("Subsystem Update") mechanism; the primary is verify-only
+  (`[pacman] type = "none"`).
+- **Rollback.** GRUB `bootcount`/`bootlimit` + greenboot health checks roll back
+  to the previous slot on a bad update.
+- **Persistence.** Config (`/etc` overlay), `/home`, and `/var` persist across
+  slots on the shared data partition — passwords, SSH host keys, `machine-id`,
+  NetworkManager, user data all survive updates.
+
+## Documentation
+
+- [docs/architecture.md](./docs/architecture.md) — components, partition layout,
+  layer map, and why it isn't stock Torizon.
+- [docs/updates-and-rollback.md](./docs/updates-and-rollback.md) — the end-to-end
+  update flow, rollback mechanism, and how to test it.
+- [docs/persistence.md](./docs/persistence.md) — `/etc` overlay + `/home` +
+  `/var` design, first-boot seeding, and tradeoffs.
 
 ## Prerequisites
 
-This layer depends on **meta-swupdate** (Sebastian Babic), which is **not** in
-the Torizon manifest. Add it, matching the Yocto release (**scarthgap**):
+Depends on **meta-swupdate** (not in the Torizon manifest). Add it, matching the
+Yocto release (**scarthgap**):
 
-```
+```sh
 cd layers
 git clone -b scarthgap https://github.com/sbabic/meta-swupdate.git
 ```
@@ -50,64 +51,56 @@ git clone -b scarthgap https://github.com/sbabic/meta-swupdate.git
 
 ## Enable the layers
 
-`meta-toradex-torizon` is added dynamically by `setup-environment`, so the most
-robust way to register these two layers is **after** sourcing the environment:
+`meta-toradex-torizon` is added dynamically by `setup-environment`, so register
+these layers **after** sourcing the environment:
 
-```
+```sh
 bitbake-layers add-layer ../layers/meta-swupdate
 bitbake-layers add-layer ../layers/meta-torizon-ab
 ```
 
-(Alternatively, append both paths to the `BBLAYERS` list in
-`layers/meta-toradex-distro/buildconf/bblayers.conf` before the first setup.)
-
 ## Build
 
-```
-. export        # or: MACHINE=genericx86-64 DISTRO=torizon-ab . setup-environment build
+```sh
+# MACHINE=genericx86-64 DISTRO=torizon-ab in local.conf (or the environment)
 
 # Minimal (no container engine):
-bitbake torizon-minimal-ab      # the A/B OS image (wic)
+bitbake torizon-minimal-ab      # A/B OS image (.wic)
 bitbake torizon-ab-swu          # its .swu update artifact
 
-# Docker (with container engine):
-bitbake torizon-docker-ab       # the A/B OS image (wic)
-bitbake torizon-docker-ab-swu   # its .swu update artifact
+# Docker:
+bitbake torizon-docker-ab
+bitbake torizon-docker-ab-swu
 ```
 
-The Docker variant is much larger than minimal; if `do_image_wic` fails with a
-"does not fit" error, increase the two `otaroot_*` `--fixed-size` values in
-`wic/torizon-ab-x86.wks` (e.g. to 4096). Container storage lives under
-`/var/lib/docker` on the shared `data` partition, so it persists across A/B
-updates.
-
-Set in `build/conf/local.conf` (or the environment):
-
-```
-MACHINE = "genericx86-64"
-DISTRO  = "torizon-ab"
-```
+`bitbake torizon-ab-swu` builds the OS image as a dependency, so it produces both
+the flashable `.wic` and the `.swu`.
 
 ## Deploy / update
 
-- Flash the `.wic` to the device (slot A is populated, slot B empty).
-- Register the rootfs `.swu` on Torizon Cloud as a **custom package** for the
-  subsystem `ecu_hardware_id = "<machine>-rootfs"` (TorizonCore Builder
-  `platform push`, or the Web UI), then trigger the update as usual.
+1. Flash the `.wic` to the device (slot A populated, slot B empty), boot,
+   provision to Torizon Cloud.
+2. Upload the rootfs `.swu` to Torizon Cloud as a **custom "Other" package** for
+   `ecu_hardware_id = "<machine>-rootfs"` (Web UI is the reliable path — see
+   [updates-and-rollback](./docs/updates-and-rollback.md#cloud-delivery-note)).
+3. Create/launch the update targeting the `<machine>-rootfs` secondary.
 
-## REVIEW checklist (validate on the build machine / target)
+## Status
 
-These points are marked `REVIEW` in the files and need a build/boot pass:
+Working end-to-end on `genericx86-64` (QEMU): flash, provision, A→B update via
+the cloud, boot into the new slot, rollback, and persistent `/etc` / `/home` /
+`/var`.
 
-1. **grubenv path** — `/boot/efi/EFI/BOOT/grubenv` must match what
-   `bootimg-efi`/grub-efi actually writes (`grub.cfg`, `swupdate_actions.sh`,
-   `grubenv-create.*`).
-2. **Kernel filename** in `grub.cfg` (`/boot/bzImage`) with
-   `INITRAMFS_IMAGE_BUNDLE=1`.
-3. **SWUpdate kconfig** option names in `torizon-ab.cfg` and the
-   `bootloader-grub` PACKAGECONFIG name (version-dependent).
-4. **sw-description** filename/`@sha256` handling for your meta-swupdate version.
-5. **Slot sizes** in the `.wks` (equal, large enough for a full rootfs).
-6. **`[pacman]` override ordering** — confirm `90-pacman.toml` wins over the
-   credential fragment's default.
-7. **Primary Uptane target** — decide what the (inert) primary tracks.
+### Known follow-ups / tuning
+
+- **Production image sizing.** The rootfs `.ext4` is ~1.5× content
+  (`IMAGE_OVERHEAD_FACTOR`); slots must exceed it (currently 4 GiB). Shrink it
+  (`IMAGE_OVERHEAD_FACTOR=1` / fixed `IMAGE_ROOTFS_SIZE`) to reduce slot and
+  `.swu` size.
+- **Signed `.swu`** (SWUpdate signature) for defense-in-depth (optional; the
+  `.swu` is already Uptane-verified by aktualizr).
+- **Primary Uptane target** — the primary is inert (`type=none`); decide what,
+  if anything, it should track for cloud reporting.
+- **Multi-machine** — U-Boot targets (e.g. `verdin-imx8mp`) need a U-Boot-env
+  bootloader/rollback path and an eMMC WKS; the machine-specific bits are
+  intentionally isolated (grub-ab, wks, fw wrappers) to make that port tractable.
