@@ -127,6 +127,35 @@ isn't visible in the container.
 **AC:** internal bug(s) filed with repro; workaround (Web UI upload) documented
 in `docs/updates-and-rollback.md` (done) until fixed.
 
+### B12 — Define requirements for offline rootfs customization / image tooling (priority: TBD)
+Decide the full feature set of a Yocto-free tool (ideally a TorizonCore Builder
+output mode) that customizes a base rootfs and produces artifacts — *this task is
+the requirements/scope definition, not the implementation.*
+**AC:** a reviewed `docs/customization-tool-requirements.md` capturing the agreed
+scope, constraints, and open questions, sufficient to plan implementation.
+
+Candidate requirements to refine (starting point):
+- **Inputs:** base rootfs (tarball and/or ext4); a "changes" directory; optional
+  scripts run cross-arch (qemu-user); a config file (à la `tcbuild.yaml`).
+- **Outputs:** (a) `.swu` A/B update for the `<machine>-rootfs` secondary;
+  (b) full **flashable `.wic`** (factory image); possibly raw ext4 / tarball.
+- **Customizations:** `/etc` defaults & files; splash; kernel modules/firmware;
+  DTB & overlays (ARM); kernel cmdline (note: lives on the ESP, not the rootfs
+  `.swu` — needs a separate path on x86); NOT `/var` content (persistent — use
+  the docker-compose secondary for containers).
+- **Environment:** no Yocto; containerized; rootless (e.g. `mke2fs -d` +
+  `fakeroot`, or libguestfs/`virt-customize`); reproducible.
+- **Multi-machine:** x86 now, `verdin-imx8mp`/eMMC later — machine-aware sizing
+  and partition/bootloader differences.
+- **Sizing:** produced ext4 must fit the A/B slot (ties to B3).
+- **Signing + delivery:** optional `.swu` signing; push to Torizon Cloud
+  (`platform push` / API) or emit for Web-UI upload.
+- **Packaging tech:** `.swu` via `swugenerator`/`mkimage` or the existing
+  `sw-description` template; `.wic` via wic or a standalone partitioner.
+- **Home:** standalone prototype first vs a TCB output target (productized).
+- **Open questions:** versioning/metadata scheme; how `.wic` and `.swu` share the
+  same customized rootfs; secure-boot/signed-image interplay (S2).
+
 ---
 
 ## Ideas / stretch
