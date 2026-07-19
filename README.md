@@ -36,6 +36,8 @@ First target: **x86-64 GRUB/EFI** — `genericx86-64` (best for QEMU iteration v
   update flow, rollback mechanism, and how to test it.
 - [docs/persistence.md](./docs/persistence.md) — `/etc` overlay + `/home` +
   `/var` design, first-boot seeding, and tradeoffs.
+- [docs/roadmap.md](./docs/roadmap.md) — task backlog with acceptance criteria
+  (delivered + planned work, priorities TBD).
 
 ## Prerequisites
 
