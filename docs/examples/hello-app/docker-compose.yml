@@ -1,0 +1,33 @@
+# Simple long-running test app for validating the docker-compose secondary
+# (Torizon application updates) on torizon-docker-ab.
+#
+# It runs nginx serving a page that prints APP_VERSION, so you can:
+#   * confirm the app is running:      docker ps
+#   * confirm it works:                curl http://<device>:8080
+#   * test an APPLICATION update:      bump APP_VERSION, re-push, curl again
+#   * test app PERSISTENCE:            push an OS A->B update, then re-check docker ps
+#
+# nginx:alpine is multi-arch (amd64 for genericx86-64, arm64 for Verdin etc.).
+
+services:
+  hello:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      - APP_VERSION=1
+    # Note: '$$' escapes to a single '$' so the *container* shell expands
+    # APP_VERSION (compose would otherwise substitute it at parse time).
+    command:
+      - sh
+      - -c
+      - |
+        echo "Torizon A/B test app - version $$APP_VERSION - $$(hostname)" \
+            > /usr/share/nginx/html/index.html
+        exec nginx -g 'daemon off;'
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
