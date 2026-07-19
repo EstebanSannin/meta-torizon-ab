@@ -1,0 +1,11 @@
+#!/bin/bash
+# grubenv wrapper emulating U-Boot's fw_printenv, so greenboot's rollback
+# scripts (redboot-auto-reboot, 00_cleanup_uboot_vars.sh, 01_log_rollback_info.sh)
+# work on x86/GRUB, where there is no real U-Boot environment.
+GRUBENV="${GRUBENV:-/boot/efi/EFI/BOOT/grubenv}"
+
+if [ $# -ne 1 ]; then
+    grub-editenv "$GRUBENV" list
+else
+    grub-editenv "$GRUBENV" list | grep "^$1=" || echo "$1="
+fi

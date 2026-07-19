@@ -1,0 +1,11 @@
+#!/bin/bash
+# grubenv wrapper emulating U-Boot's fw_setenv on x86/GRUB (see fw_printenv).
+#   fw_setenv NAME VALUE   -> set NAME=VALUE in grubenv
+#   fw_setenv NAME         -> unset NAME from grubenv
+GRUBENV="${GRUBENV:-/boot/efi/EFI/BOOT/grubenv}"
+
+if [ $# -eq 2 ]; then
+    grub-editenv "$GRUBENV" set "$1"="$2"
+elif [ $# -eq 1 ]; then
+    grub-editenv "$GRUBENV" unset "$1"
+fi

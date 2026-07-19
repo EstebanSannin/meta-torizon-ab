@@ -17,7 +17,21 @@ do_install:append:torizon-ab () {
     install -m 0744 ${WORKDIR}/swupdate_actions.sh ${D}${bindir}/swupdate_actions.sh
 
     local machine="${MACHINE}"
-    cat ${D}${libdir}/sota/secondaries.json |\
+    local secfile=${D}${libdir}/sota/secondaries.json
+
+    # On x86 there is no U-Boot, so the bootloader secondary (bl_actions.sh via
+    # fw_printenv/fw_setenv) is non-functional and errors every aktualizr cycle.
+    # Drop it. Keep it on U-Boot machines (handled by the multi-machine work).
+    case "${MACHINE}" in
+        genericx86-64|intel-corei7-64)
+            jq '.["torizon-generic"] |= map(select((.ecu_hardware_id | endswith("-bootloader")) | not))' \
+                "$secfile" > ${WORKDIR}/sec-nobl.json
+            install -m 0644 ${WORKDIR}/sec-nobl.json "$secfile"
+            ;;
+    esac
+
+    # Add the '<machine>-rootfs' subsystem secondary (the OS A/B update channel).
+    cat "$secfile" |\
         jq '.["torizon-generic"] +=
              [{"partial_verifying": false,
                "ecu_hardware_id": "'"$machine"'-rootfs",
@@ -30,7 +44,7 @@ do_install:append:torizon-ab () {
                "action_handler_path": "/usr/bin/swupdate_actions.sh"}]' \
         > ${WORKDIR}/secondaries-ab.json
 
-    install -m 0644 ${WORKDIR}/secondaries-ab.json ${D}${libdir}/sota/secondaries.json
+    install -m 0644 ${WORKDIR}/secondaries-ab.json "$secfile"
 }
 
 FILES:${PN}:append:torizon-ab = " ${bindir}/swupdate_actions.sh"
