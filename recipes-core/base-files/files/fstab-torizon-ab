@@ -6,7 +6,11 @@
 # up in the initramfs (initramfs-module-torizon-ab-persist) BEFORE switch_root,
 # so they are intentionally NOT listed here — the initramfs owns them.
 #
-# <file system>        <mount pt>   <type>  <options>              <dump> <pass>
-LABEL=efi              /boot/efi    vfat    defaults,noatime         0      2
-proc                   /proc        proc    defaults                 0      0
-tmpfs                  /tmp         tmpfs   defaults                 0      0
+# <file system>        <mount pt>   <type>  <options>                    <dump> <pass>
+LABEL=efi              /boot/efi    vfat    defaults,noatime               0      2
+proc                   /proc        proc    defaults                       0      0
+tmpfs                  /tmp         tmpfs   defaults                       0      0
+# devpts with the tty group (gid=5) — shipped by oe-core's default fstab, which
+# this file replaces. Required so an UNPRIVILEGED process (RAC's spawned sshd,
+# running as torizon) gets ptys in the 'tty' group and can set up the login pty.
+devpts                 /dev/pts     devpts  mode=0620,gid=5,ptmxmode=666    0      0

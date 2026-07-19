@@ -76,8 +76,11 @@ path from the initramfs; overlayfs holds the real references, so it is cosmetic.
 - **overlayfs must be available in the kernel.** On `genericx86-64` it is
   built-in (`CONFIG_OVERLAY_FS=y`). On a kernel where it is a module, add that
   module to the initramfs image; the persist script `modprobe overlay` first.
-- **`/etc` and `/home` are NOT in `/etc/fstab`.** The initramfs owns them; only
-  `/boot/efi` remains in fstab. Do not re-add `/var` there.
+- **`/etc` and `/home` are NOT in `/etc/fstab`.** The initramfs owns them (along
+  with `/var`); fstab only carries `/boot/efi`, `proc`, `/tmp`, and `devpts`. Do
+  not re-add `/var` there. Note the `devpts … gid=5,mode=620` line is required:
+  we replace oe-core's default fstab, and without that entry `/dev/pts` lacks the
+  `tty` group, which breaks RAC's unprivileged spawned sshd (remote access).
 - **Rollback protects the rootfs, not persistent config.** Because `/etc` is a
   shared overlay, a bad configuration written to `/etc` at runtime affects
   *both* slots — rolling back the rootfs does not undo it. A/B rollback defends
