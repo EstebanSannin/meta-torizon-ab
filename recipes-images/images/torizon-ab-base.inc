@@ -20,14 +20,14 @@ IMAGE_OVERHEAD_FACTOR = "1.5"
 IMAGE_FEATURES += "ssh-server-openssh bash-completion-pkgs splash"
 SPLASH = "plymouth"
 
-# The kernel + initramfs live INSIDE each rootfs slot (/boot); GRUB loads them
-# from the active slot. Make sure they are installed into the rootfs.
-# (No kernel-devicetree on x86 — there are no DTBs; add it back per-machine for
-#  ARM targets, e.g. CORE_IMAGE_BASE_INSTALL:append:<arm-machine> = " kernel-devicetree".)
+# The kernel + initramfs live INSIDE each rootfs slot (/boot); the bootloader
+# (GRUB on x86, U-Boot on imx8mp) loads them from the active slot.
 CORE_IMAGE_BASE_INSTALL:append = " \
     kernel-image \
     kernel-modules \
 "
+# Device trees are needed on ARM (U-Boot loads the DTB); x86 has none.
+CORE_IMAGE_BASE_INSTALL:append:verdin-imx8mp = " kernel-devicetree"
 
 # Install the initramfs alongside the kernel in each rootfs slot's /boot so GRUB
 # can load it (root=LABEL= is resolved by the initramfs, not the kernel). Kept
@@ -93,6 +93,7 @@ CORE_IMAGE_BASE_INSTALL:append:tdx = " \
 # (aktualizr comes from sota.bbclass) plus greenboot and SWUpdate.
 # ---------------------------------------------------------------------------
 # aktualizr-torizon RPROVIDES aktualizr / aktualizr-info, so it covers those.
+# Machine-agnostic update + A/B stack:
 CORE_IMAGE_BASE_INSTALL:append = " \
     aktualizr-torizon \
     auto-provisioning \
@@ -101,11 +102,18 @@ CORE_IMAGE_BASE_INSTALL:append = " \
     greenboot \
     aktualizr-pacman-none \
     swupdate \
-    grub-ab \
     torizon-ab-slots-udev \
     torizon-ab-pending-reboot \
     resize-data-helper \
 "
+
+# Per-machine bootloader + A/B boot-env glue (provides the bootenv helper the
+# rootfs action handler sources):
+#   x86      -> grub-ab   (grubenv + grub.cfg rollback + fw_* grubenv wrappers)
+#   imx8mp   -> uboot-ab  (U-Boot boot script + real fw_setenv env + fw_env.config)
+CORE_IMAGE_BASE_INSTALL:append:genericx86-64   = " grub-ab"
+CORE_IMAGE_BASE_INSTALL:append:intel-corei7-64 = " grub-ab"
+CORE_IMAGE_BASE_INSTALL:append:verdin-imx8mp   = " uboot-ab"
 
 # The rootfs subsystem secondary + swupdate_actions.sh handler are added to the
 # shared aktualizr secondaries via a bbappend to aktualizr-default-sec (pulled

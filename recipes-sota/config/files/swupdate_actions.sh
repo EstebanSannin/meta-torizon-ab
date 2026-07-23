@@ -1,24 +1,22 @@
 #!/bin/bash
 #
-# Aktualizr Subsystem-Update action handler for the OS rootfs on an
-# A/B (dual rootfs) + SWUpdate system, GRUB/x86 flavour.
+# Aktualizr Subsystem-Update action handler for the OS rootfs on an A/B (dual
+# rootfs) + SWUpdate system. MACHINE-AGNOSTIC: the bootloader specifics (how the
+# active slot is selected and how the trial/rollback state is stored) live in a
+# per-machine helper sourced from /usr/lib/torizon-ab/bootenv.sh —
+#   x86     -> provided by grub-ab   (grubenv)
+#   imx8mp  -> provided by uboot-ab  (real U-Boot env via fw_setenv)
 #
-# Contract (see Toradex "First Steps With Subsystem Updates"):
+# Contract (Toradex "Subsystem Updates"):
 #   $1 = get-firmware-info | install | complete-install
 #   env: SECONDARY_FIRMWARE_PATH, SECONDARY_FIRMWARE_SHA256, SECONDARY_CUSTOM_METADATA
 #   stdout: JSON {"status": "ok|need-completion|failed", "message": "..."}
 #   exit:  0 handled, 64 request-normal-processing, 65 request-error
 #
-# Model:
-#   - Two rootfs partitions labelled otaroot_a / otaroot_b, each carrying its
-#     own /boot (kernel + initramfs).
-#   - The .swu payload is the full rootfs ext4 image; SWUpdate raw-writes it to
-#     the INACTIVE slot (selected by SWUpdate mode slot_a / slot_b).
-#   - GRUB env (grubenv) drives slot selection + rollback:
-#       default            0 -> slot A entry, 1 -> slot B entry
-#       upgrade_available  1 while a freshly-flashed slot is on trial
-#       bootcount/bootlimit boot-attempt counter (GRUB rolls back when exceeded)
-#       ab_target          label of the slot we just flashed (trial target)
+# Slots: ext4 labels otaroot_a / otaroot_b, each carrying its own /boot. The .swu
+# payload is the full rootfs ext4 image; SWUpdate raw-writes it to the INACTIVE
+# slot (SWUpdate mode slot_a/slot_b), then we restore the ext4 label and arm the
+# bootloader to boot that slot on trial.
 
 shopt -s expand_aliases
 source "/usr/bin/common_actions.sh"
@@ -33,25 +31,19 @@ LOG_VARS="${AB_LOG_VARS:-0}"
 LOG_DIR="/var/lib/rollback-manager"
 LOG_FILE="${LOG_DIR}/rootfs-update.log"
 
-# Path to the grubenv on the shared EFI partition (grub prefix = /EFI/BOOT,
-# ESP mounted at /boot/efi). Must match grub.cfg's load_env/save_env location
-# and the grub-ab grubenv-create service.
-GRUBENV="${AB_GRUBENV:-/boot/efi/EFI/BOOT/grubenv}"
-
 LABEL_A="otaroot_a"
 LABEL_B="otaroot_b"
 
 set -o pipefail
 
-req_program "/usr/bin/grub-editenv" && alias GRUBEDITENV="$_"
-req_program "/usr/bin/lsblk"        && alias LSBLK="$_"
-req_program "/usr/bin/findmnt"      && alias FINDMNT="$_"
-req_program "/usr/bin/swupdate"     && alias SWUPDATE="$_"
-req_program "/usr/bin/touch"        && alias TOUCH="$_"
+req_program "/usr/bin/lsblk"    && alias LSBLK="$_"
+req_program "/usr/bin/findmnt"  && alias FINDMNT="$_"
+req_program "/usr/bin/swupdate" && alias SWUPDATE="$_"
+req_program "/usr/bin/touch"    && alias TOUCH="$_"
 # Required by common_actions.sh (get_file_sha256 uses the SED alias but does not
 # define it — the sourcing script must, like bl_actions.sh does).
-req_program "/usr/bin/sed"          && alias SED="$_"
-req_program "/usr/sbin/e2label"     && alias E2LABEL="$_"
+req_program "/usr/bin/sed"      && alias SED="$_"
+req_program "/usr/sbin/e2label" && alias E2LABEL="$_"
 
 maybe_run() {
     if [ "$DRY_RUN" = "1" ]; then
@@ -64,7 +56,7 @@ maybe_run() {
     eval "$@" >>"${LOG_FILE}" 2>&1
 }
 
-# --- Slot helpers ------------------------------------------------------------
+# --- Slot helpers (machine-agnostic) -----------------------------------------
 
 # output: label of the currently-running rootfs slot (otaroot_a|otaroot_b)
 get_active_label() {
@@ -83,13 +75,6 @@ get_inactive_label() {
     die "Bad active label '$1'"
 }
 
-# $1: label -> output: grub 'default' index (A=0, B=1)
-label_to_index() {
-    [ "$1" = "$LABEL_A" ] && { echo "0"; return 0; }
-    [ "$1" = "$LABEL_B" ] && { echo "1"; return 0; }
-    die "Bad label '$1'"
-}
-
 # $1: label -> output: SWUpdate selection mode (slot_a|slot_b)
 label_to_mode() {
     [ "$1" = "$LABEL_A" ] && { echo "slot_a"; return 0; }
@@ -97,18 +82,17 @@ label_to_mode() {
     die "Bad label '$1'"
 }
 
-grubenv_get() {
-    GRUBEDITENV "$GRUBENV" list 2>/dev/null | sed -Ene "s/^$1=(.*)$/\1/p"
-}
+# --- Per-machine boot-env operations -----------------------------------------
+# Provides: bootenv_arm_trial <label>, bootenv_confirm, bootenv_trial_target
+# (see grub-ab / uboot-ab). Sourced after maybe_run/log/die are defined so the
+# helper can use them.
+source "/usr/lib/torizon-ab/bootenv.sh"
 
 # --- Actions -----------------------------------------------------------------
 
 do_get_firmware_info() {
-    # Let aktualizr determine the installed version from the target_name file it
-    # keeps alongside the firmware (exit 64 = request normal processing), exactly
-    # like the reference bl_actions.sh. Reporting a slot label here would not
-    # match the pushed target name and could make a successful update look
-    # not-applied. The active/installed slot is logged for debugging only.
+    # Defer to aktualizr (exit 64), like bl_actions.sh — reporting a slot label
+    # here would not match the pushed target name.
     local active
     active=$(get_active_label 2>/dev/null) || active="unknown"
     log "get-firmware-info: running slot=$active (deferring to aktualizr)"
@@ -118,61 +102,42 @@ do_get_firmware_info() {
 do_install() {
     before_dying 'on_install_failed'
     check_install_vars
-    # NOTE: no check_target_sha256 here. aktualizr already Uptane-verifies the
-    # downloaded target before calling this action, and SWUpdate independently
-    # verifies the sha256 of the payload inside the .swu (see sw-description).
-    # SECONDARY_FIRMWARE_SHA256 is the Uptane-metadata hash, not the plain sha
-    # of the stored .swu.new, so re-hashing here only produces false mismatches.
+    # No check_target_sha256: aktualizr already Uptane-verifies the target.
 
-    local active inactive mode idx_new idx_old
+    local active inactive mode
     active=$(get_active_label)
     inactive=$(get_inactive_label "$active")
     mode=$(label_to_mode "$inactive")
-    idx_new=$(label_to_index "$inactive")
-    idx_old=$(label_to_index "$active")
 
     log "Installing rootfs update"
-    log "Active slot:   $active (index $idx_old)"
-    log "Inactive slot: $inactive (index $idx_new), swupdate mode=$mode"
+    log "Active slot:   $active"
+    log "Inactive slot: $inactive (swupdate mode=$mode)"
     log "Payload:       $SECONDARY_FIRMWARE_PATH"
 
-    # Resolve the inactive slot's real block device NOW, while its ext4 label
-    # still exists. SWUpdate raw-writes the rootfs image onto the slot, which
-    # replaces the slot's ext4 label with the image's label, so /dev/disk/by-
-    # label/${inactive} disappears after the write. We keep the resolved device
-    # to (a) unmount it and (b) restore the label afterwards.
+    # Resolve the inactive slot's device NOW, while its ext4 label still exists
+    # (the raw write replaces the label, so by-label/${inactive} disappears).
     local inactive_dev
     inactive_dev="$(readlink -f "/dev/disk/by-label/${inactive}" 2>/dev/null || true)"
     [ -b "$inactive_dev" ] || die "Cannot resolve device for inactive slot $inactive"
     log "Inactive slot device: $inactive_dev"
 
-    # Defensive: make sure the inactive slot is NOT mounted before SWUpdate
-    # raw-writes it (a udev/ignorelist keeps the automounter off it, but belt &
-    # suspenders in case something mounted it).
+    # Defensive: ensure the inactive slot is not mounted before the raw write.
     if findmnt -rn -S "$inactive_dev" >/dev/null 2>&1; then
         log "Inactive slot $inactive is mounted; unmounting before write"
         maybe_run umount "$inactive_dev" || die "Could not unmount $inactive before write"
     fi
 
-    # Write the .swu into the inactive slot. The sw-description inside the .swu
-    # maps mode slot_a -> /dev/disk/by-label/otaroot_a and slot_b -> ...b.
+    # Write the .swu into the inactive slot (sw-description maps slot_a/slot_b to
+    # /dev/disk/by-label/otaroot_a|b).
     maybe_run SWUPDATE -v -i "$SECONDARY_FIRMWARE_PATH" -e "stable,$mode" \
         || die "SWUpdate failed writing slot $inactive"
 
-    # Restore the ext4 label the raw write clobbered, so GRUB (search --label)
-    # and the kernel (root=LABEL=) can find this slot again — and so the next
-    # update can still resolve /dev/disk/by-label/${inactive}.
+    # Restore the ext4 label the raw write clobbered.
     maybe_run E2LABEL "$inactive_dev" "$inactive" \
         || die "Could not restore ext4 label $inactive on $inactive_dev"
 
-    # Point GRUB at the freshly-flashed slot on trial.
-    maybe_run GRUBEDITENV "$GRUBENV" set \
-        default="$idx_new" \
-        upgrade_available="1" \
-        bootcount="0" \
-        ab_prev="$idx_old" \
-        ab_target="$inactive" \
-        || die "Could not update grub environment"
+    # Arm the bootloader to boot the freshly-flashed slot on trial (per-machine).
+    bootenv_arm_trial "$inactive" || die "Could not arm bootloader for slot $inactive"
 
     maybe_run TOUCH "${REBOOT_SENTINEL_FILE}"
     echo '{"status": "need-completion", "message": "rootfs written to inactive slot; rebooting"}'
@@ -191,30 +156,23 @@ do_complete_install() {
 
     local active target
     active=$(get_active_label)
-    target=$(grubenv_get ab_target)
+    target=$(bootenv_trial_target)
 
     log "complete-install: running slot=$active, trial target=$target"
 
     if [ -z "$target" ]; then
-        # Nothing pending (e.g. handler invoked spuriously): normal processing.
-        exit 64
+        exit 64   # nothing pending
     fi
+
+    bootenv_confirm   # clear the trial state either way
 
     if [ "$active" = "$target" ]; then
-        # We booted the new slot successfully. Confirm it: clear the trial flag.
-        # Greenboot's health checks provide the deeper "is it healthy" gate.
-        maybe_run GRUBEDITENV "$GRUBENV" set upgrade_available="0"
-        maybe_run GRUBEDITENV "$GRUBENV" unset ab_target
         log "Rootfs update to slot $target confirmed"
         echo '{"status": "ok", "message": "rootfs update confirmed"}'
-        return 0
+    else
+        log "Rootfs update failed; system rolled back to slot $active"
+        echo '{"status": "failed", "message": "rootfs update failed; rolled back"}'
     fi
-
-    # We are NOT running the trial slot -> GRUB rolled us back. Report failure.
-    maybe_run GRUBEDITENV "$GRUBENV" set upgrade_available="0"
-    maybe_run GRUBEDITENV "$GRUBENV" unset ab_target
-    log "Rootfs update failed; system rolled back to slot $active"
-    echo '{"status": "failed", "message": "rootfs update failed; rolled back"}'
     return 0
 }
 

@@ -13,6 +13,7 @@ SRC_URI = " \
     file://00_reset_bootcount.sh \
     file://fw_printenv \
     file://fw_setenv \
+    file://bootenv.sh \
 "
 
 # grub-editenv comes from grub-efi; greenboot provides the health-check hooks.
@@ -37,6 +38,10 @@ do_install() {
 
     install -d ${D}${sysconfdir}/greenboot/green.d
     install -m 0755 ${WORKDIR}/00_reset_bootcount.sh ${D}${sysconfdir}/greenboot/green.d/00_reset_bootcount.sh
+
+    # Boot-env helper sourced by the rootfs action handler.
+    install -d ${D}${libdir}/torizon-ab
+    install -m 0644 ${WORKDIR}/bootenv.sh ${D}${libdir}/torizon-ab/bootenv.sh
 }
 
 FILES:${PN} = " \
@@ -45,4 +50,8 @@ FILES:${PN} = " \
     ${bindir}/fw_setenv \
     ${systemd_unitdir}/system/grubenv-create.service \
     ${sysconfdir}/greenboot/green.d/00_reset_bootcount.sh \
+    ${libdir}/torizon-ab/bootenv.sh \
 "
+
+# The action handler (aktualizr-default-sec) sources /usr/lib/torizon-ab/bootenv.sh.
+RPROVIDES:${PN} += "torizon-ab-bootenv"

@@ -49,6 +49,7 @@ do_install:append:torizon-ab () {
 
 FILES:${PN}:append:torizon-ab = " ${bindir}/swupdate_actions.sh"
 
-# common_actions.sh (sourced by swupdate_actions.sh) is installed by the base
-# recipe when BL_UPDATE_SUPPORT=1 (default on genericx86-64). Ensure it is kept.
-RDEPENDS:${PN}:append:torizon-ab = " swupdate"
+# swupdate_actions.sh sources /usr/bin/common_actions.sh (base recipe) and
+# /usr/lib/torizon-ab/bootenv.sh (provided per-machine by grub-ab or uboot-ab
+# via RPROVIDES torizon-ab-bootenv). Require both to be present.
+RDEPENDS:${PN}:append:torizon-ab = " swupdate torizon-ab-bootenv"

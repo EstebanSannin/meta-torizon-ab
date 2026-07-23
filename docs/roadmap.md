@@ -89,13 +89,37 @@ Option B: Toradex `repo init` + copy fragment + `repo sync`) followed by
 `.swu` with no manual layer/DISTRO edits; revisions pinned for reproducibility;
 steps captured in the README.
 
-### B2 — Multi-machine: `verdin-imx8mp` (U-Boot) + generalization (priority: TBD)
-Abstract the bootloader/rollback/partition layer behind per-machine overrides;
-add a U-Boot-env rollback path (real `fw_setenv`), an eMMC WKS, and boot-script
-A/B selection.
-**AC:** `MACHINE=verdin-imx8mp DISTRO=torizon-ab bitbake torizon-minimal-ab`
-builds; device boots slot A; a cloud rootfs update switches to slot B and rolls
-back on failure; x86 remains unaffected. Work happens on a branch.
+### B2 — Multi-machine: `verdin-imx8mp` (U-Boot) + generalization (In progress)
+Branch: `multi-machine-imx8mp`. Abstract the bootloader/rollback/partition layer
+behind per-machine overrides; add a U-Boot-env rollback path (real `fw_setenv`)
+and a boot-script A/B selection.
+
+Machine-abstraction done (keeps x86 working):
+- `torizon-ab.conf` image output is machine-conditional (x86 → wic; imx8mp →
+  `tar.bz2` + `ext4.gz`, no wic/GRUB).
+- The action handler `swupdate_actions.sh` is machine-agnostic; boot-env ops
+  (`bootenv_arm_trial`/`bootenv_confirm`/`bootenv_trial_target`) come from a
+  per-machine `/usr/lib/torizon-ab/bootenv.sh`: `grub-ab` (grubenv) on x86,
+  `uboot-ab` (real `fw_setenv`) on imx8mp.
+- Image installs `grub-ab` on x86 / `uboot-ab` on imx8mp; `kernel-devicetree`
+  added on imx8mp; `libubootenv` `u-boot-default-env` removal scoped to x86.
+- `uboot-ab`: U-Boot A/B `boot.scr` (draft), U-Boot `bootenv.sh`, green.d
+  bootcount reset.
+
+**Phase 1 (bring-up, reuse the board's U-Boot):** deploy the A/B rootfs + data
++ our `boot.scr`; iterate the boot script from the U-Boot console.
+**AC (Phase 1):** `MACHINE=verdin-imx8mp DISTRO=torizon-ab bitbake torizon-minimal-ab`
+builds a rootfs; on hardware the board boots slot A via our `boot.scr`; a cloud
+rootfs update writes slot B and reboots into it; a failed trial rolls back to A.
+
+**Phase 2 (native flashing):** produce a `teziimg` with the A/B eMMC layout
+(imx-boot in boot0, rootfs_a/rootfs_b/data) flashable with Toradex tools.
+**AC (Phase 2):** a `teziimg` flashes via TEZI and boots to slot A with the full
+update/rollback/persistence flow working.
+
+Open HW-iteration points (draft `boot.cmd`): device/partition scan, load
+addresses, DTB name, and where the board's U-Boot looks for `boot.scr`.
+x86 remains unaffected throughout.
 
 ### B3 — Production image/slot sizing (priority: TBD)
 Shrink the rootfs image (`IMAGE_OVERHEAD_FACTOR=1` or fixed `IMAGE_ROOTFS_SIZE`)
