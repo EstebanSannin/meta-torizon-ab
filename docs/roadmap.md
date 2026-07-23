@@ -58,11 +58,36 @@ the docs. ✅
 ## Backlog (Todo)
 
 ### B1 — Ready-to-build `repo` manifest (priority: TBD)
-A dedicated manifest repo (`torizon-ab-manifest`) that fetches the Torizon base +
-`meta-swupdate` + `meta-torizon-ab` and pre-registers layers + `DISTRO`.
-**AC:** from scratch, `repo init -u <manifest> && repo sync && . setup-environment build && bitbake torizon-ab-swu`
-produces the image and `.swu` with no manual layer/DISTRO edits; revisions
-pinned for reproducibility.
+Make a fresh checkout build the AB variant with (near) one command, fetching the
+Torizon base + `meta-swupdate` + `meta-torizon-ab` and pre-registering layers +
+`DISTRO=torizon-ab`.
+
+Base manifest (starting point): `https://git.toradex.com/toradex-manifest.git`
+(several manifests/branches exist there; pick the Torizon one we build from).
+
+Two shapes considered (see also the reasoning in chat/design notes):
+- **Option A — dedicated manifest repo** (e.g. `torizon-ab-manifest`): copy of
+  the Toradex manifest + `<project>` entries for `meta-swupdate` and
+  `meta-torizon-ab`, revisions pinned. Best UX (single `repo init`), but it forks
+  the base manifest and can drift from upstream.
+- **Option B (recommended) — `local_manifests` fragment hosted in this repo**
+  (`meta-torizon-ab/manifests/torizon-ab.xml`): user does the normal Toradex
+  `repo init`, then drops the fragment into `.repo/local_manifests/`, adding only
+  `meta-swupdate` + `meta-torizon-ab`. No fork/drift, lives in one repo; one
+  extra step.
+
+Gotcha: do NOT put a *full* manifest inside `meta-torizon-ab` — `repo` would use
+the layer repo as the manifest repo AND list it as a project, fetching it twice.
+`repo` also can't `<include>` a manifest from a different remote, so there's no
+"include upstream + overlay" middle ground — it's fork (A) or `local_manifests`
+overlay (B).
+
+**Decision:** TBD (leaning B).
+**AC:** from a clean checkout, the documented steps (Option A: `repo init -u <manifest> && repo sync`;
+Option B: Toradex `repo init` + copy fragment + `repo sync`) followed by
+`. setup-environment build && bitbake torizon-ab-swu` produce the image and
+`.swu` with no manual layer/DISTRO edits; revisions pinned for reproducibility;
+steps captured in the README.
 
 ### B2 — Multi-machine: `verdin-imx8mp` (U-Boot) + generalization (priority: TBD)
 Abstract the bootloader/rollback/partition layer behind per-machine overrides;
