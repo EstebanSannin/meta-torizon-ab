@@ -5,7 +5,14 @@ logic in grub.cfg."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 
-inherit systemd allarch
+inherit systemd
+
+# x86/GRUB only. This must NOT be a candidate on U-Boot machines (imx8mp), where
+# uboot-ab provides torizon-ab-bootenv + the green.d hook — otherwise both get
+# pulled to satisfy the virtual and their files conflict. (allarch + machine
+# restriction don't mix, so use MACHINE_ARCH.)
+PACKAGE_ARCH = "${MACHINE_ARCH}"
+COMPATIBLE_MACHINE = "(genericx86-64|intel-corei7-64)"
 
 SRC_URI = " \
     file://grubenv-create.sh \
