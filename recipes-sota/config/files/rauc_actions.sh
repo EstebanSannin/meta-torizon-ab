@@ -25,6 +25,8 @@ trap '' TERM
 
 # --- Configuration -----------------------------------------------------------
 DRY_RUN="${AB_DRY_RUN:-0}"
+LOG_ENABLED="${AB_LOG_ENABLED:-1}"
+LOG_VARS="${AB_LOG_VARS:-0}"
 LOG_DIR="/var/lib/rollback-manager"
 LOG_FILE="${LOG_DIR}/rootfs-update.log"
 # Records the slot we asked RAUC to boot, so complete-install can tell whether
