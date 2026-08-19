@@ -1,8 +1,9 @@
 # meta-torizon-ab — task backlog & roadmap
 
-Working backlog for the OSTree-free A/B + SWUpdate Torizon variant. Each task
-has an acceptance criterion ("Done when…"). **Priority is left as `TBD`** for us
-to set together. Status: `Done`, `In progress`, `Todo`, `Idea`.
+Working backlog for the OSTree-free A/B Torizon variant (SWUpdate + RAUC updater
+backends). Each task has an acceptance criterion ("Done when…"). **Priority is
+left as `TBD`** for us to set together. Status: `Done`, `In progress`, `Todo`,
+`Idea`.
 
 Legend: **AC** = acceptance criteria.
 
@@ -49,9 +50,11 @@ cloud remote session yields a working shell. ✅ (needed the devpts `gid=5` fsta
 fix)
 
 ### D7 — Documentation
-`docs/architecture.md`, `docs/updates-and-rollback.md`, `docs/persistence.md`.
-**AC:** a new engineer can build, flash, update, and understand persistence from
-the docs. ✅
+`docs/architecture.md`, `docs/updates-and-rollback.md`, `docs/persistence.md`,
+plus RAUC-specific `docs/rauc-decisions.md` and `docs/rauc-cloud-test.md`; all
+kept backend-neutral (SWUpdate + RAUC) where the two share behavior.
+**AC:** a new engineer can build, flash, update, and understand persistence and
+both updater backends from the docs. ✅
 
 ### D8 — RAUC updater backend (`torizon-ab-rauc`)
 A second updater backend in the same layer, selected by distro, sharing

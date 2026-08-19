@@ -116,7 +116,7 @@ bitbake torizon-ab-bundle       # its signed .raucb update artifact
 2. Upload the rootfs update payload — `.swu` for `torizon-ab`, `.raucb` for
    `torizon-ab-rauc` — to Torizon Cloud as a **custom "Other" package** for
    `ecu_hardware_id = "<machine>-rootfs"` (Web UI is the reliable path — see
-   [updates-and-rollback](./docs/updates-and-rollback.md#cloud-delivery-note)).
+   [updates-and-rollback](./docs/updates-and-rollback.md#cloud-delivery-note-both-backends)).
 3. Create/launch the update targeting the `<machine>-rootfs` secondary.
 
 ## Status

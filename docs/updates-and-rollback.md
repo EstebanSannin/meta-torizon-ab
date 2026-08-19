@@ -1,6 +1,11 @@
 # Updates and rollback
 
-## Update flow (A → B)
+This layer has two updater backends (see
+[architecture](./architecture.md#two-updater-backends-one-layer)); the flow and
+rollback mechanism differ below the aktualizr seam. The **SWUpdate** flow and
+its rollback are described first; the **RAUC** flow and rollback are at the end.
+
+## SWUpdate update flow (A → B)
 
 The OS rootfs is delivered through aktualizr's **generic secondary** mechanism
 (Torizon "Subsystem Updates"), not as an OSTree primary target. The aktualizr
@@ -50,7 +55,7 @@ greenboot health check on B
 - The handler's `get-firmware-info` returns exit 64 (defer to aktualizr) rather
   than reporting a slot label as the version.
 
-## Rollback
+## Rollback (SWUpdate)
 
 Two independent layers implement rollback:
 
@@ -71,7 +76,7 @@ unchanged.
 > persistent config in `/etc` (a shared overlay across slots) — see
 > [persistence](./persistence.md).
 
-## Testing rollback
+## Testing rollback (SWUpdate)
 
 **Quick (GRUB logic only)** — only if the other slot already holds a valid OS:
 
@@ -96,7 +101,7 @@ grub-editenv /boot/efi/EFI/BOOT/grubenv list   # default flips back to the good 
 fails; baked into the image it lives in the rootfs (overlay *lower*), so only the
 bad slot fails and rollback returns to the good slot.
 
-## Manual slot switch
+## Manual slot switch (SWUpdate)
 
 ```sh
 # default=0 -> slot A, default=1 -> slot B; upgrade_available=0 = permanent (no trial)
@@ -106,14 +111,15 @@ sudo reboot
 
 Only switch to a slot that contains a valid OS.
 
-## Cloud delivery note
+## Cloud delivery note (both backends)
 
-Push the rootfs `.swu` as a **custom "Other" package** for the
-`<machine>-rootfs` hardware id (Torizon Cloud Web UI, or the API). Note that at
-time of writing `torizoncore-builder platform push` routes non-compose/non-ostree
-files down the OSTree path unless the file is visible inside its container, and
-the bundled `uptane-sign` has an S3 multipart-completion bug on large uploads —
-so the Web UI is the reliable path for the large rootfs `.swu`.
+Push the rootfs payload — `.swu` for `torizon-ab`, `.raucb` for
+`torizon-ab-rauc` — as a **custom "Other" package** for the `<machine>-rootfs`
+hardware id (Torizon Cloud Web UI, or the API). Note that at time of writing
+`torizoncore-builder platform push` routes non-compose/non-ostree files down the
+OSTree path unless the file is visible inside its container, and the bundled
+`uptane-sign` has an S3 multipart-completion bug on large uploads — so the Web UI
+is the reliable path for the large rootfs payload.
 
 
 ## RAUC update flow (torizon-ab-rauc)
@@ -156,3 +162,39 @@ greenboot remains the health authority; its green.d hook calls
 
 See [rauc-cloud-test.md](./rauc-cloud-test.md) for the full cloud test runbook
 and [rauc-decisions.md](./rauc-decisions.md) for the design rationale.
+
+### Testing rollback and manual slot switch (RAUC)
+
+Inspect state with `rauc status` (booted slot, each slot's good/bad flag, and
+which slot is activated for the next boot).
+
+**Manual slot switch** — activate the other slot for the next boot:
+
+```sh
+sudo rauc status mark-active other
+sudo reboot
+```
+
+**Force a rollback** — mark the currently-booted slot bad so the bootloader
+falls through `ORDER` to the other slot on the next boot:
+
+```sh
+sudo rauc status mark-bad booted
+sudo reboot
+```
+
+**Full greenboot-driven rollback** — ship a deliberately-unhealthy slot with the
+`torizon-ab-rollback-test` package (baked into the image, it lives in the rootfs
+so only the bad slot fails). After an A→B update into it, the health check
+fails, the new slot is never `mark-good`'d, and the next boot falls through to
+the previous good slot:
+
+```sh
+# build server
+echo 'IMAGE_INSTALL:append = " torizon-ab-rollback-test"' >> conf/local.conf
+MACHINE=genericx86-64 DISTRO=torizon-ab-rauc bitbake torizon-minimal-ab torizon-ab-bundle
+# push the .raucb as a NEW package version, update the device into it, then observe:
+sudo journalctl -u greenboot-healthcheck -u redboot-auto-reboot -b
+sudo rauc status         # booted slot returns to the previous good slot
+# afterwards: remove the local.conf line and rebuild a clean image
+```

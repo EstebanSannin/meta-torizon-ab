@@ -87,8 +87,8 @@ path from the initramfs; overlayfs holds the real references, so it is cosmetic.
   against a bad *image* (bad binary/kernel/config shipped in the rootfs), which
   lives in the overlay *lower* and differs per slot.
 - **Data partition sizing.** The data partition also holds the downloaded
-  `.swu` during an update (`/var/sota`) and, for the docker variant,
-  `/var/lib/docker`. Size it accordingly (currently 4 GiB — see
+  update payload (`.swu`/`.raucb`) during an update (`/var/sota`) and, for the
+  docker variant, `/var/lib/docker`. Size it accordingly (currently 4 GiB — see
   [partitioning](./architecture.md#partition-layout)).
 - **`machine-id`.** Persisted via `/etc`, so device identity is stable across
   updates.
