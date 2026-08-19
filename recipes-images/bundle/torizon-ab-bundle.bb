@@ -23,3 +23,7 @@ RAUC_CERT_FILE = "${WORKDIR}/dev.cert.pem"
 RAUC_BUNDLE_SLOTS = "rootfs"
 RAUC_SLOT_rootfs = "torizon-minimal-ab"
 RAUC_SLOT_rootfs[fstype] = "ext4"
+
+# Our image recipe overrides IMAGE_LINK_NAME without the ".rootfs" infix that
+# bundle.bbclass expects by default, so point it at the actual deployed name.
+RAUC_SLOT_rootfs[file] = "torizon-minimal-ab-${MACHINE}.ext4"

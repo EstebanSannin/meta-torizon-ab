@@ -1,19 +1,18 @@
-# On-target RAUC configuration for the Torizon OS A/B (RAUC) variant.
-#
-# Installs /etc/rauc/system.conf (two rootfs slots addressed by GPT PARTLABEL,
-# grub bootloader backend writing the shared grubenv on the ESP) and the dev
-# keyring used to verify bundle signatures. Only active for torizon-ab-rauc.
+# Torizon OS A/B (RAUC): provide our system.conf + verification keyring via the
+# meta-rauc 'rauc-conf' recipe (RPROVIDES virtual-rauc-conf, RRECOMMENDED by the
+# rauc package). We override the example keyring through FILESEXTRAPATHS and
+# rewrite system.conf in do_install:append so it can be templated (compatible
+# string + PARTLABEL slot devices).
 
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
 
-SRC_URI:append:torizon-ab-rauc = " file://keyring.pem"
+# Use our dev keyring instead of the meta-rauc example ca.cert.pem.
+RAUC_KEYRING_FILE:torizon-ab-rauc = "keyring.pem"
 
 RAUC_COMPATIBLE ??= "torizon-ab-rauc-${MACHINE}"
 
+# The base recipe installs the example system.conf; overwrite it with ours.
 do_install:append:torizon-ab-rauc () {
-    install -d ${D}${sysconfdir}/rauc
-    install -m 0644 ${WORKDIR}/keyring.pem ${D}${sysconfdir}/rauc/keyring.pem
-
     cat > ${D}${sysconfdir}/rauc/system.conf <<EOF
 [system]
 compatible=${RAUC_COMPATIBLE}
@@ -37,5 +36,3 @@ type=ext4
 bootname=B
 EOF
 }
-
-FILES:${PN}:append:torizon-ab-rauc = " ${sysconfdir}/rauc/keyring.pem ${sysconfdir}/rauc/system.conf"

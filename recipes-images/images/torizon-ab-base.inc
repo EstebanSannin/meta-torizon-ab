@@ -108,7 +108,7 @@ CORE_IMAGE_BASE_INSTALL:append = " \
 
 # The OS-update engine is backend-specific (selected by the distro).
 CORE_IMAGE_BASE_INSTALL:append:torizon-ab-swupdate = " swupdate"
-CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc     = " rauc"
+CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc     = " rauc rauc-conf"
 
 # Per-machine bootloader + A/B boot-env glue (provides the bootenv helper the
 # rootfs action handler sources):
