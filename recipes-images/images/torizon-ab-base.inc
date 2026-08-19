@@ -101,19 +101,26 @@ CORE_IMAGE_BASE_INSTALL:append = " \
     tzn-mqtt \
     greenboot \
     aktualizr-pacman-none \
-    swupdate \
     torizon-ab-slots-udev \
     torizon-ab-pending-reboot \
     resize-data-helper \
 "
 
+# The OS-update engine is backend-specific (selected by the distro).
+CORE_IMAGE_BASE_INSTALL:append:torizon-ab-swupdate = " swupdate"
+CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc     = " rauc"
+
 # Per-machine bootloader + A/B boot-env glue (provides the bootenv helper the
 # rootfs action handler sources):
 #   x86      -> grub-ab   (grubenv + grub.cfg rollback + fw_* grubenv wrappers)
 #   imx8mp   -> uboot-ab  (U-Boot boot script + real fw_setenv env + fw_env.config)
-CORE_IMAGE_BASE_INSTALL:append:genericx86-64   = " grub-ab"
-CORE_IMAGE_BASE_INSTALL:append:intel-corei7-64 = " grub-ab"
-CORE_IMAGE_BASE_INSTALL:append:verdin-imx8mp   = " uboot-ab"
+# SWUpdate backend: hand-rolled grubenv counting (grub-ab) / U-Boot env (uboot-ab).
+CORE_IMAGE_BASE_INSTALL:append:torizon-ab-swupdate:genericx86-64   = " grub-ab"
+CORE_IMAGE_BASE_INSTALL:append:torizon-ab-swupdate:intel-corei7-64 = " grub-ab"
+CORE_IMAGE_BASE_INSTALL:append:torizon-ab-swupdate:verdin-imx8mp   = " uboot-ab"
+# RAUC backend: RAUC's native grub bootloader backend + its grubenv bootstrap.
+CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc:genericx86-64       = " rauc-grub-ab"
+CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc:intel-corei7-64     = " rauc-grub-ab"
 
 # The rootfs subsystem secondary + swupdate_actions.sh handler are added to the
 # shared aktualizr secondaries via a bbappend to aktualizr-default-sec (pulled

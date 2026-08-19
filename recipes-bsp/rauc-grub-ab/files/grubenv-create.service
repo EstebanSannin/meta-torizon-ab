@@ -1,0 +1,14 @@
+[Unit]
+Description=Initialize RAUC GRUB A/B environment (grubenv) if missing
+DefaultDependencies=no
+After=local-fs.target
+RequiresMountsFor=/boot/efi
+Before=sysinit.target greenboot-healthcheck.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/rauc-grubenv-create.sh
+
+[Install]
+WantedBy=sysinit.target

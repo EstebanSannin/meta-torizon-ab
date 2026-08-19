@@ -1,0 +1,20 @@
+# short-description: Torizon OS A/B (dual rootfs) + RAUC EFI disk image
+# long-description:
+#   Same GPT layout as the SWUpdate variant, but the two rootfs slots also carry
+#   GPT PARTITION LABELS (--part-name rootfs_a/rootfs_b). RAUC addresses slots by
+#   PARTLABEL (/dev/disk/by-partlabel/...), which lives in the partition table
+#   and survives a raw ext4 write — so there is no ext4-label-restore step, and
+#   GRUB/kernel select the slot via root=PARTLABEL= + rauc.slot=.
+#     p1 /boot/efi vfat label=efi                       - GRUB EFI + grub.cfg + grubenv
+#     p2 /         ext4 label=otaroot_a part-name=rootfs_a - rootfs slot A (factory)
+#     p3           ext4 label=otaroot_b part-name=rootfs_b - rootfs slot B (empty)
+#     p4 /var      ext4 label=data                       - shared persistent data
+#
+# Slot sizing / data auto-expand notes are identical to torizon-ab-x86.wks.
+
+part /boot/efi --source bootimg-efi --sourceparams="loader=grub-efi" --ondisk sda --label efi --active --align 1024 --fixed-size 128 --no-fstab-update
+part /     --source rootfs --ondisk sda --fstype=ext4 --label otaroot_a --part-name rootfs_a --align 1024 --fixed-size 4096 --no-fstab-update
+part       --ondisk sda --fstype=ext4 --label otaroot_b --part-name rootfs_b --align 1024 --fixed-size 4096
+part /var  --ondisk sda --fstype=ext4 --label data --align 1024 --fixed-size 4096 --no-fstab-update
+
+bootloader --ptable gpt --timeout=3 --configfile="grub-rauc.cfg"
