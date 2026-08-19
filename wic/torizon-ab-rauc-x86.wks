@@ -13,8 +13,8 @@
 # Slot sizing / data auto-expand notes are identical to torizon-ab-x86.wks.
 
 part /boot/efi --source bootimg-efi --sourceparams="loader=grub-efi" --ondisk sda --label efi --active --align 1024 --fixed-size 128 --no-fstab-update
-part /     --source rootfs --ondisk sda --fstype=ext4 --label otaroot_a --part-name rootfs_a --align 1024 --fixed-size 4096 --no-fstab-update
-part       --ondisk sda --fstype=ext4 --label otaroot_b --part-name rootfs_b --align 1024 --fixed-size 4096
+part /     --source rootfs --ondisk sda --fstype=ext4 --part-name rootfs_a --align 1024 --fixed-size 4096 --no-fstab-update
+part       --ondisk sda --fstype=ext4 --part-name rootfs_b --align 1024 --fixed-size 4096
 part /var  --ondisk sda --fstype=ext4 --label data --align 1024 --fixed-size 4096 --no-fstab-update
 
 bootloader --ptable gpt --timeout=3 --configfile="grub-rauc.cfg"

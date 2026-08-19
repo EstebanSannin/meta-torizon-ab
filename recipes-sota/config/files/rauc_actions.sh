@@ -36,6 +36,7 @@ set -o pipefail
 req_program "/usr/bin/rauc" && alias RAUC="$_"
 req_program "/usr/bin/touch" && alias TOUCH="$_"
 req_program "/usr/bin/sed"   && alias SED="$_"
+req_program "/usr/bin/findmnt" && alias FINDMNT="$_"
 
 maybe_run() {
     if [ "$DRY_RUN" = "1" ]; then
@@ -87,6 +88,19 @@ do_install() {
     log "Booted slot:  $booted"
     log "Target slot:  $target (RAUC selects the inactive slot automatically)"
     log "Payload:      $SECONDARY_FIRMWARE_PATH"
+
+    # Defensive: the target slot must be free. udisks/usermount may auto-mount an
+    # inactive slot; RAUC opens the slot device exclusively and fails if it is
+    # busy. Unmount any inactive A/B slot (never the running root at /).
+    for _p in rootfs_a rootfs_b; do
+        _d="$(readlink -f "/dev/disk/by-partlabel/$_p" 2>/dev/null || true)"
+        [ -b "$_d" ] || continue
+        _mp="$(findmnt -nro TARGET -S "$_d" 2>/dev/null | head -1 || true)"
+        if [ -n "$_mp" ] && [ "$_mp" != "/" ]; then
+            log "Unmounting inactive slot $_p ($_d) from $_mp before install"
+            maybe_run umount "$_d" || log "warning: could not unmount $_d"
+        fi
+    done
 
     # RAUC picks the inactive slot, writes it, verifies the signature, and arms
     # the bootloader to boot it next on trial.

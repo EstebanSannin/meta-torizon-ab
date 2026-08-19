@@ -4,3 +4,7 @@
 # / by the kernel; the inactive slot must stay unmounted.
 SUBSYSTEM=="block", ENV{ID_FS_LABEL}=="otaroot_a", ENV{UDISKS_IGNORE}="1"
 SUBSYSTEM=="block", ENV{ID_FS_LABEL}=="otaroot_b", ENV{UDISKS_IGNORE}="1"
+# RAUC variant addresses slots by GPT PARTLABEL; keep those off the automounter
+# too (belt-and-suspenders; the RAUC slots carry no ext4 label).
+SUBSYSTEM=="block", ENV{ID_PART_ENTRY_NAME}=="rootfs_a", ENV{UDISKS_IGNORE}="1"
+SUBSYSTEM=="block", ENV{ID_PART_ENTRY_NAME}=="rootfs_b", ENV{UDISKS_IGNORE}="1"
