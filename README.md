@@ -1,7 +1,8 @@
 # meta-torizon-ab
 
 A Torizon OS variant **without OSTree**, using a classic **A/B dual-rootfs**
-scheme updated by **SWUpdate**, while keeping the Torizon update/cloud stack:
+scheme updated by **SWUpdate or RAUC** (selectable per distro), while keeping
+the Torizon update/cloud stack:
 aktualizr (as a download+verify-only *primary*), Remote Access Client (RAC),
 tzn-mqtt and auto-provisioning.
 
@@ -86,6 +87,33 @@ the flashable `.wic` and the `.swu`.
    `ecu_hardware_id = "<machine>-rootfs"` (Web UI is the reliable path — see
    [updates-and-rollback](./docs/updates-and-rollback.md#cloud-delivery-note)).
 3. Create/launch the update targeting the `<machine>-rootfs` secondary.
+
+
+## Updater backends: SWUpdate or RAUC
+
+This one layer builds either updater backend, selected by the distro:
+
+| Distro | Backend | Notes |
+|--------|---------|-------|
+| `torizon-ab`      | SWUpdate | original variant, `.swu` payload |
+| `torizon-ab-rauc` | RAUC     | `.raucb` bundle, signed; RAUC's native GRUB backend |
+
+Everything above the aktualizr **generic-secondary** seam is shared; only the
+action handler and payload differ. Build the RAUC variant with:
+
+```sh
+# in local.conf / environment:  MACHINE=genericx86-64 DISTRO=torizon-ab-rauc
+bitbake torizon-minimal-ab      # A/B OS image (.wic)
+bitbake torizon-ab-bundle       # its signed .raucb update artifact
+```
+
+Deliver the `.raucb` through Torizon Cloud exactly like the `.swu`: upload it as
+a custom "Other" package for `ecu_hardware_id = <machine>-rootfs`, then launch an
+update targeting that secondary.
+
+See [docs/rauc-decisions.md](./docs/rauc-decisions.md) for the RAUC architecture
+and rationale, and [docs/rauc-cloud-test.md](./docs/rauc-cloud-test.md) for the
+end-to-end cloud test runbook.
 
 ## Status
 

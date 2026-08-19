@@ -53,6 +53,16 @@ fix)
 **AC:** a new engineer can build, flash, update, and understand persistence from
 the docs. ✅
 
+### D8 — RAUC updater backend (`torizon-ab-rauc`)
+A second updater backend in the same layer, selected by distro, sharing
+everything above the aktualizr generic-secondary seam. RAUC applies the OS
+update (`.raucb`) via its native GRUB backend; slots addressed by GPT PARTLABEL.
+**AC:** `DISTRO=torizon-ab-rauc bitbake torizon-minimal-ab torizon-ab-bundle`
+builds a bootable A/B `.wic` + a signed `.raucb`; QEMU boots slot A; a local
+`rauc install` and a full **Torizon Cloud + aktualizr** update both switch A→B
+with a rollback slot retained. ✅ (validated on genericx86-64/QEMU)
+See [rauc-decisions.md](./rauc-decisions.md), [rauc-cloud-test.md](./rauc-cloud-test.md).
+
 ---
 
 ## Backlog (Todo)
@@ -128,6 +138,9 @@ so slots and the `.swu` are minimal.
 still succeeds; documented sizing rationale.
 
 ### B4 — Signed `.swu` (priority: TBD)
+> Note: the RAUC backend already signs its bundles (mandatory in RAUC); this
+> item is the SWUpdate-side signing. Production key management is a follow-up
+> for both (RAUC currently uses in-tree DEV keys).
 Enable SWUpdate image signing (`SWUPDATE_SIGNING`) + on-device verification, in
 addition to aktualizr's Uptane verification.
 **AC:** an unsigned/tampered `.swu` is rejected by SWUpdate; a properly signed

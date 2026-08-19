@@ -106,3 +106,29 @@ recipes-support/swupdate/*                      SWUpdate build config
 recipes-support/resize-data-helper/*            grow data partition to fill medium (first boot)
 recipes-support/rollback-test/*                 TEST-ONLY failing greenboot check
 ```
+
+
+## Updater backends (SWUpdate / RAUC)
+
+The layer supports two OS-update backends behind the same aktualizr
+generic-secondary seam, selected by distro:
+
+- `torizon-ab`      — SWUpdate (`.swu`), hand-rolled grubenv rollback + `e2label`
+  slot identity by ext4 FS label.
+- `torizon-ab-rauc` — RAUC (`.raucb`, signed), RAUC's native GRUB backend, slot
+  identity by GPT PARTLABEL (no ext4 label, no relabel step).
+
+A shared include `conf/distro/include/torizon-ab-common.inc` holds the common
+foundation; each distro conf appends a `DISTROOVERRIDES` token — `:torizon-ab`
+(shared) plus `:torizon-ab-swupdate` / `:torizon-ab-rauc` (backend-specific).
+Everything above the seam (distro base, images, persistence, initramfs, resize,
+udev, pending-reboot, secondary registration) is shared verbatim.
+
+RAUC-specific pieces: `rauc` + `rauc-conf` (system.conf by PARTLABEL + dev
+keyring), `rauc-grub-ab` (grubenv bootstrap + greenboot `rauc status mark-good`),
+`recipes-sota/config/files/rauc_actions.sh`, `wic/grub-rauc.cfg`,
+`wic/torizon-ab-rauc-x86.wks`, a `linux-yocto` squashfs kernel fragment (RAUC
+mounts the bundle squashfs on-target), and the `torizon-ab-bundle` `.raucb`
+producer.
+
+Full rationale and alternatives in [rauc-decisions.md](./rauc-decisions.md).

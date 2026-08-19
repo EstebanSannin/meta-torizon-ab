@@ -114,3 +114,45 @@ time of writing `torizoncore-builder platform push` routes non-compose/non-ostre
 files down the OSTree path unless the file is visible inside its container, and
 the bundled `uptane-sign` has an S3 multipart-completion bug on large uploads —
 so the Web UI is the reliable path for the large rootfs `.swu`.
+
+
+## RAUC update flow (torizon-ab-rauc)
+
+Same seam as above; the secondary's `action_handler_path` is
+`/usr/bin/rauc_actions.sh` and the payload is a signed `.raucb` bundle.
+
+```
+Torizon Cloud (Uptane/TUF)
+   |  rootfs .raucb (custom "Other" package for <machine>-rootfs)
+   v
+aktualizr-torizon      download + Uptane-verify -> /var/sota/storage/rootfs/rootfs.raucb
+   |  calls the action handler: install
+   v
+/usr/bin/rauc_actions.sh (install)
+   1. unmount any auto-mounted inactive slot (defensive)
+   2. rauc install rootfs.raucb   -> verify signature (keyring), raw-write inactive
+                                      slot, arm bootloader (grubenv ORDER/_OK/_TRY)
+   3. record trial target; touch /run/need-reboot -> {"status":"need-completion"}
+   v
+torizon-ab-pending-reboot -> reboot
+   v
+GRUB (grub-rauc.cfg): boot the slot first in ORDER with _OK=1,_TRY=0; set its
+   _TRY=1; kernel gets root=PARTLABEL=rootfs_<a|b> rauc.slot=<A|B>
+   v
+greenboot health check
+   - healthy   -> `rauc status mark-good` (clears _TRY, sets _OK); aktualizr
+                   complete-install reports success
+   - unhealthy -> reboot; the trial _TRY stays set, so the next boot falls
+                   through ORDER to the other slot (rollback)
+```
+
+### RAUC vs SWUpdate rollback
+
+RAUC's GRUB backend owns the boot-selection/rollback accounting (`ORDER`,
+`<bootname>_OK`, `<bootname>_TRY`), replacing the SWUpdate variant's
+`bootcount`/`bootlimit` logic and the `fw_printenv`/`fw_setenv` grubenv wrappers.
+greenboot remains the health authority; its green.d hook calls
+`rauc status mark-good` instead of resetting a counter.
+
+See [rauc-cloud-test.md](./rauc-cloud-test.md) for the full cloud test runbook
+and [rauc-decisions.md](./rauc-decisions.md) for the design rationale.
