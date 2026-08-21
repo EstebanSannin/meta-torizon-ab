@@ -62,7 +62,7 @@ use the finer `:torizon-ab-swupdate` / `:torizon-ab-rauc` token.
 OSTree packages) that explicitly installs the update stack `:sota` would
 otherwise inject — `aktualizr-torizon`, `rac`, `tzn-mqtt`, `auto-provisioning`,
 `greenboot`, `aktualizr-pacman-none`, `torizon-ab-slots-udev`,
-`torizon-ab-pending-reboot`, `resize-data-helper`, and the kernel/initramfs —
+`torizon-ab-pending-reboot`, `resize-data-helper`, `os-release`, and the kernel/initramfs —
 plus the **backend-specific** updater + bootloader glue:
 
 - SWUpdate: `swupdate` + `grub-ab` (x86) / `uboot-ab` (imx8mp).

@@ -121,9 +121,19 @@ bitbake torizon-ab-bundle       # its signed .raucb update artifact
 
 ## Status
 
-Both backends work end-to-end on `genericx86-64` (QEMU): flash, provision, A→B
-update via Torizon Cloud, boot into the new slot, rollback, and persistent
-`/etc` / `/home` / `/var`.
+Both backends run on `genericx86-64` (QEMU): flash, provision, apply a Torizon
+Cloud A→B update (the device boots the new slot), keep the previous slot as a
+rollback target, and persist `/etc` / `/home` / `/var`. RAUC is additionally
+verified via a local `rauc install`.
+
+> **Known issue — cloud reports failed after a RAUC cloud update (reboot race,
+> under investigation).** The OS update is applied correctly on the device (it
+> boots the new slot), but aktualizr can report it to Torizon Cloud as **failed**:
+> the reboot is triggered from inside the install action and can outrun
+> aktualizr's durable pending-install record. See
+> [docs/updates-and-rollback.md](./docs/updates-and-rollback.md) and
+> [docs/rauc-decisions.md](./docs/rauc-decisions.md). Full greenboot-driven
+> *rollback* is wired but not yet validated end-to-end (roadmap B5).
 
 ### Known follow-ups / tuning
 

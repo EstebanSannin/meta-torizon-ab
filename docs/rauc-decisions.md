@@ -5,9 +5,11 @@ original **SWUpdate-based** one in this same layer. Captures the decisions taken
 the rationale, and the alternatives rejected, plus the concrete findings from
 bring-up (build host + QEMU + Torizon Cloud).
 
-Status: validated end-to-end on `genericx86-64` (QEMU) — builds, boots slot A,
-local `rauc install` A→B, and a full **Torizon Cloud + aktualizr** update A→B
-with rollback slot retained.
+Status: validated on `genericx86-64` (QEMU) — builds, boots slot A, local
+`rauc install` A→B, and a full **Torizon Cloud + aktualizr** update that applies
+A→B on the device with the previous slot retained for rollback. One known issue
+remains under investigation: aktualizr can report that cloud update as *failed*
+even though the device updated correctly — the **reboot race** (see Open items).
 
 ## Context and goal
 
@@ -146,6 +148,19 @@ RAUC-specific (`:torizon-ab-rauc`): `rauc` + `rauc-conf` (system.conf + keyring)
 
 ## Open items / follow-ups
 
+- **Reboot race → wrong cloud status (under investigation).** The handler
+  triggers the reboot (`touch /run/need-reboot`) inside the install action, which
+  can outrun aktualizr's durable `kPending` write; the device updates correctly
+  but aktualizr reports *failed* and never runs `complete-install`. aktualizr
+  won't self-reboot here (the OS is a secondary; primary `[pacman]=none` uses the
+  fake package manager). Direction: reconcile from **observed state** — have
+  `get-firmware-info` report the booted slot's real installed image
+  (`TorizonGenericSecondary::getFirmwareInfo` uses the handler's `sha256`/`length`
+  output), so any boot (clean or power-cut) matches reality and reports
+  correctly. **No `sleep`/timing hacks** (they aren't power-cut safe; the commit
+  point — RAUC arming the bootloader — already is). Open sub-decision: observed-
+  state alone vs. also re-sequencing the reboot so aktualizr records `kPending`
+  first (for the discrete "install succeeded" cloud event).
 - Production signing keys (replace the in-tree dev key/cert/keyring).
 - Multi-disk-robust slot selection in `grub-rauc.cfg` (GPT-position assumption).
 - `verity` bundles + delta/casync updates.

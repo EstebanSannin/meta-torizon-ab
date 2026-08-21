@@ -65,6 +65,18 @@ builds a bootable A/B `.wic` + a signed `.raucb`; QEMU boots slot A; a local
 `rauc install` and a full **Torizon Cloud + aktualizr** update both switch A→B
 with a rollback slot retained. ✅ (validated on genericx86-64/QEMU)
 See [rauc-decisions.md](./rauc-decisions.md), [rauc-cloud-test.md](./rauc-cloud-test.md).
+Caveat: the cloud update applies correctly on-device but aktualizr may report it
+*failed* due to a reboot race — see **B13**.
+
+### D9 — Fix missing `/etc/os-release`
+The variant dropped the OSTree image classes that generate os-release in stock
+Torizon (and Torizon's systemd bbappend drops it from RRECOMMENDS), so
+`/usr/lib/os-release` was never installed — `/etc/os-release` was a dangling
+symlink. Re-add the oe-core `os-release` package (shared, both backends) + a
+rootfs post-process that sets the Torizon-style `VARIANT` from `IMAGE_VARIANT`.
+**AC:** on a booted image `cat /etc/os-release` shows correct `ID`/`NAME`/
+`VERSION`/`VARIANT` and the symlink resolves through the `/etc` overlay. ✅
+(verified on a live genericx86-64 QEMU boot; `VARIANT=Minimal-AB`)
 
 ---
 
@@ -149,11 +161,16 @@ addition to aktualizr's Uptane verification.
 **AC:** an unsigned/tampered `.swu` is rejected by SWUpdate; a properly signed
 one installs; keys/process documented.
 
-### B5 — End-to-end rollback validation (priority: TBD)
-Use `torizon-ab-rollback-test` to ship a deliberately-unhealthy slot.
-**AC:** device boots the bad slot, greenboot fails, `redboot-auto-reboot`
-reboots, and after `bootlimit` GRUB rolls back to the previous good slot; the OS
-update is reported failed in the cloud.
+### B5 — End-to-end rollback validation (both backends) (priority: TBD)
+Use `torizon-ab-rollback-test` to ship a deliberately-unhealthy slot. Neither
+backend has had a full greenboot-driven *rollback event* validated yet (only the
+rollback slot being retained).
+**AC (SWUpdate):** device boots the bad slot, greenboot fails,
+`redboot-auto-reboot` reboots, and after `bootlimit` GRUB rolls back to the
+previous good slot; the OS update is reported failed in the cloud.
+**AC (RAUC):** same, but rollback is driven by RAUC's GRUB backend
+(`ORDER`/`_OK`/`_TRY`) — the unhealthy slot is never `rauc status mark-good`'d,
+so the next boot falls through `ORDER` to the previous good slot.
 
 ### B6 — Container-app persistence across OS update (priority: TBD)
 **AC:** with a docker-compose app running (see `docs/examples/hello-app`), an OS
@@ -220,6 +237,19 @@ Candidate requirements to refine (starting point):
 - **Home:** standalone prototype first vs a TCB output target (productized).
 - **Open questions:** versioning/metadata scheme; how `.wic` and `.swu` share the
   same customized rootfs; secure-boot/signed-image interplay (S2).
+
+### B13 — RAUC cloud update reported failed (reboot race) (priority: TBD)
+A Torizon Cloud + aktualizr update applies correctly on-device (boots the new
+slot) but aktualizr reports it **failed**: the handler triggers the reboot
+(`touch /run/need-reboot`) inside the install action, outrunning aktualizr's
+durable `kPending` write, so `complete-install` never runs. aktualizr won't
+self-reboot here (OS is a secondary; primary `[pacman]=none`). Fix direction:
+observed-state reconciliation via `get-firmware-info` (report the booted slot's
+real installed image) — **no `sleep`/timing hacks** (not power-cut safe). Likely
+affects the SWUpdate variant too. Diagnosis in
+[rauc-decisions.md](./rauc-decisions.md) (Open items) + a sequence diagram.
+**AC:** after a cloud A→B update the device is on the new slot **and** Torizon
+Cloud shows it installed/succeeded; correct across a power cut at any point.
 
 ---
 

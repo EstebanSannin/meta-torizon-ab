@@ -87,8 +87,18 @@ Expected sequence:
 3. `/run/need-reboot` → `torizon-ab-pending-reboot` reboots.
 4. GRUB boots the freshly-installed slot (`rauc.slot=B`, `root=PARTLABEL=rootfs_b`).
 5. greenboot health check passes → `rauc status mark-good`.
-6. aktualizr `complete-install` reports success; the cloud shows the new version
-   installed on `<machine>-rootfs`.
+6. On the next boot aktualizr finalizes the install and reports to the cloud.
+
+> ⚠️ **Known issue — reboot race (under investigation).** Step 3's reboot is
+> triggered from *inside* the install action (`rauc_actions.sh` touches
+> `/run/need-reboot`), so it can outrun aktualizr writing its durable
+> pending-install (`kPending`) record. The device still ends up correctly on the
+> new slot (RAUC armed it in step 2), but aktualizr may report the update as
+> **failed** to Torizon Cloud, and `complete-install` never runs on the next
+> boot. The physical update and the retained rollback slot are unaffected — this
+> is purely a reporting/sequencing bug. Diagnosis and fix direction (observed-
+> state reconciliation via `get-firmware-info`, *not* a sleep) are in
+> [rauc-decisions.md](./rauc-decisions.md).
 
 Verify on device:
 

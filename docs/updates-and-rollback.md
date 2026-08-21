@@ -152,6 +152,22 @@ greenboot health check
                    through ORDER to the other slot (rollback)
 ```
 
+### Known issue — cloud reports failed (reboot race, under investigation)
+
+In the flow above, the reboot is triggered from *inside* the install action
+(`rauc_actions.sh` touches `/run/need-reboot`, watched by
+`torizon-ab-pending-reboot`). Because the OS rides an aktualizr **secondary**
+(primary `[pacman]=none`, which never reboots itself), this handler-driven
+reboot can fire *before* aktualizr durably records the pending install
+(`kPending`) — so on the next boot `checkAndUpdatePendingSecondaries()` finds
+nothing to complete, `complete-install` never runs, and aktualizr reports the
+update **failed** to the cloud. The device is nonetheless correctly running the
+new slot (RAUC armed it), and the previous slot is retained for rollback — this
+is a reporting/sequencing bug, not a broken update. The same handler pattern
+exists in the SWUpdate variant. Diagnosis and fix direction (observed-state
+reconciliation via `get-firmware-info`, **not** a `sleep`) live in
+[rauc-decisions.md](./rauc-decisions.md).
+
 ### RAUC vs SWUpdate rollback
 
 RAUC's GRUB backend owns the boot-selection/rollback accounting (`ORDER`,
