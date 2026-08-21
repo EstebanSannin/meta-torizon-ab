@@ -135,3 +135,28 @@ IMAGE_INSTALL:remove = "grub-ota-fallback"
 # Firmware/kernel-module packages that must live in the rootfs (per SoC).
 CORE_IMAGE_BASE_INSTALL:append:mx8-nxp-bsp   = " kernel-module-imx-gpu-viv"
 CORE_IMAGE_BASE_INSTALL:append:mx8mp-nxp-bsp = " kernel-module-isp-vvcam"
+
+# ---------------------------------------------------------------------------
+# /etc/os-release
+#
+# Stock Torizon supplies os-release via the OSTree image classes we dropped, and
+# the Torizon systemd bbappend removes os-release from systemd's RRECOMMENDS — so
+# without this the os-release package is never installed, /usr/lib/os-release is
+# missing, and /etc/os-release is a dangling symlink. Re-add the oe-core
+# os-release package (ID/NAME/VERSION come from DISTRO/DISTRO_NAME/DISTRO_VERSION)
+# and set the Torizon-style VARIANT from the image's IMAGE_VARIANT, mirroring
+# meta-toradex-torizon's tweak_os_release_variant.
+# ---------------------------------------------------------------------------
+CORE_IMAGE_BASE_INSTALL:append = " os-release"
+
+set_os_release_variant () {
+    osr="${IMAGE_ROOTFS}${nonarch_libdir}/os-release"
+    if [ -n "${IMAGE_VARIANT}" ] && [ -f "$osr" ]; then
+        if grep -q '^VARIANT=' "$osr"; then
+            sed -i -e "s/^VARIANT=.*/VARIANT=\"${IMAGE_VARIANT}\"/" "$osr"
+        else
+            printf 'VARIANT="%s"\n' "${IMAGE_VARIANT}" >> "$osr"
+        fi
+    fi
+}
+ROOTFS_POSTPROCESS_COMMAND += "set_os_release_variant;"
