@@ -1,10 +1,12 @@
-# /etc/fstab for Torizon OS A/B (no OSTree) — Verdin AM62p (U-Boot, no ESP).
+# /etc/fstab for Torizon OS A/B (no OSTree) — U-Boot SoMs with no EFI/ESP
+# (Verdin AM62p, Verdin i.MX8MP, and future Toradex ARM machines).
 #
-# Same as the x86 fstab but WITHOUT the /boot/efi mount: on AM62p there is no EFI
-# system partition — U-Boot reads boot.scr from the FAT boot partition directly
+# Same as the x86 fstab but WITHOUT the /boot/efi mount: these machines have no
+# EFI system partition — U-Boot reads boot.scr from the boot partition directly
 # and the boot firmware lives in the eMMC boot0 HW partition, so there is nothing
 # to mount at /boot/efi. (Mounting the nonexistent efi label is exactly what put
-# the first A/B boot into emergency mode.)
+# the first AM62p A/B boot into systemd emergency mode.) This is the DEFAULT
+# fstab; only x86 opts back into the ESP mount (see base-files_%.bbappend).
 #
 # Root is mounted by the kernel via root=PARTLABEL=rootfs_a|rootfs_b (set by
 # boot.scr). /var (the shared data partition), the /etc overlay, and /home are

@@ -57,6 +57,9 @@ IMAGE_FSTYPES:append:verdin-imx8mp = " tar.bz2"
 TORIZON_AB_ROOTLABEL_A ?= "otaroot_a"
 TORIZON_AB_ROOTLABEL_B ?= "otaroot_b"
 TORIZON_AB_DATALABEL   ?= "data"
-TORIZON_AB_BOOTLABEL   ?= "efi"
+# (No TORIZON_AB_BOOTLABEL: the boot-partition label differs per machine — "efi"
+# on x86, "boot" on am62p, none on imx8mp — and nothing consumes it. Any code
+# that needs the boot label should take it per-machine from the wks, not from a
+# shared x86-flavoured default.)
 TORIZON_AB_PARTLABEL_A ?= "rootfs_a"
 TORIZON_AB_PARTLABEL_B ?= "rootfs_b"

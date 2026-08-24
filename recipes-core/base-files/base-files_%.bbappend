@@ -11,14 +11,20 @@
 
 FILESEXTRAPATHS:prepend:torizon-ab := "${THISDIR}/files:"
 
-# The x86 fstab mounts the ESP at /boot/efi (grubenv lives there). AM62p (U-Boot)
-# has no ESP, so it uses a variant without that line — mounting the nonexistent
-# efi label otherwise drops the boot into emergency mode.
-TORIZON_AB_FSTAB ?= "fstab-torizon-ab"
-TORIZON_AB_FSTAB:verdin-am62p = "fstab-torizon-ab-am62"
+# Two fstab variants:
+#   fstab-torizon-ab        - x86: mounts the ESP at /boot/efi (grubenv lives there)
+#   fstab-torizon-ab-noesp  - U-Boot SoMs: no ESP, so no /boot/efi mount
+# The NO-ESP fstab is the DEFAULT so every ARM/U-Boot machine is safe out of the
+# box; the ESP mount is opt-in for x86 ONLY. (Previously this was inverted — the
+# ESP fstab was the default and only am62p opted out — which left verdin-imx8mp,
+# the other U-Boot target, mounting a nonexistent efi label -> systemd emergency
+# mode. Defaulting to no-ESP means a future ARM SoM can never silently inherit
+# the x86 ESP mount again.)
+TORIZON_AB_FSTAB ?= "fstab-torizon-ab-noesp"
+TORIZON_AB_FSTAB:genericx86-64   = "fstab-torizon-ab"
+TORIZON_AB_FSTAB:intel-corei7-64 = "fstab-torizon-ab"
 
-SRC_URI:append:torizon-ab = " file://fstab-torizon-ab"
-SRC_URI:append:verdin-am62p = " file://fstab-torizon-ab-am62"
+SRC_URI:append:torizon-ab = " file://fstab-torizon-ab file://fstab-torizon-ab-noesp"
 
 do_install:append:torizon-ab () {
     install -m 0644 ${WORKDIR}/${TORIZON_AB_FSTAB} ${D}${sysconfdir}/fstab
