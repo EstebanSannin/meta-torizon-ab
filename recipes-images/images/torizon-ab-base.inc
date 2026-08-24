@@ -126,6 +126,13 @@ CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc:intel-corei7-64     = " rauc-grub
 # bootstrap + the A/B boot.scr (see recipes-bsp/rauc-uboot-ab).
 CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc:verdin-am62p        = " rauc-uboot-ab"
 
+# AM62p: the FAT boot partition carries only our A/B boot.scr (the slot selector
+# that U-Boot's bootflow/script bootmeth runs); kernel/DTB/initramfs live per
+# slot in the rootfs /boot. Override the machine's stock multi-file
+# IMAGE_BOOT_FILES, and make the .wic wait for rauc-uboot-ab to deploy boot.scr.
+IMAGE_BOOT_FILES:verdin-am62p = "boot.scr"
+do_image_wic[depends] += "${@bb.utils.contains('MACHINE', 'verdin-am62p', 'rauc-uboot-ab:do_deploy', '', d)}"
+
 # The rootfs subsystem secondary + swupdate_actions.sh handler are added to the
 # shared aktualizr secondaries via a bbappend to aktualizr-default-sec (pulled
 # in by aktualizr-torizon's RDEPENDS), so no extra package is needed here.

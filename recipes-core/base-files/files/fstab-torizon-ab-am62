@@ -1,0 +1,19 @@
+# /etc/fstab for Torizon OS A/B (no OSTree) — Verdin AM62p (U-Boot, no ESP).
+#
+# Same as the x86 fstab but WITHOUT the /boot/efi mount: on AM62p there is no EFI
+# system partition — U-Boot reads boot.scr from the FAT boot partition directly
+# and the boot firmware lives in the eMMC boot0 HW partition, so there is nothing
+# to mount at /boot/efi. (Mounting the nonexistent efi label is exactly what put
+# the first A/B boot into emergency mode.)
+#
+# Root is mounted by the kernel via root=PARTLABEL=rootfs_a|rootfs_b (set by
+# boot.scr). /var (the shared data partition), the /etc overlay, and /home are
+# set up by the initramfs (initramfs-module-torizon-ab-persist) BEFORE
+# switch_root, so they are intentionally NOT listed here.
+#
+# <file system>        <mount pt>   <type>  <options>                    <dump> <pass>
+proc                   /proc        proc    defaults                       0      0
+tmpfs                  /tmp         tmpfs   defaults                       0      0
+# devpts with the tty group (gid=5) so an unprivileged process (RAC's spawned
+# sshd, running as torizon) gets ptys in the 'tty' group for its login pty.
+devpts                 /dev/pts     devpts  mode=0620,gid=5,ptmxmode=666    0      0

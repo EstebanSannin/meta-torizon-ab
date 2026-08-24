@@ -54,10 +54,15 @@ saveenv
 echo "RAUC: booting slot ${raucslot} (mmc ${mmcdev}:${rootpartnum}, root=PARTLABEL=${rootlabel})"
 setenv bootargs "root=PARTLABEL=${rootlabel} rootfstype=ext4 rw rauc.slot=${raucslot} ${torizon_extra_bootargs}"
 
+# Scratch address for the COMPRESSED Image.gz. On this board loadaddr ==
+# kernel_addr_r (0x88200000), so unzipping in place would overlap; load the
+# compressed image lower and unzip up to kernel_addr_r.
+setenv comp_addr 0x84000000
+
 # load kernel + dtb + initramfs from the selected slot's ext4 /boot
-ext4load mmc ${mmcdev}:${rootpartnum} ${loadaddr} /boot/Image.gz
-unzip ${loadaddr} ${kernel_addr_r}
-ext4load mmc ${mmcdev}:${rootpartnum} ${fdt_addr_r} /boot/${fdtfile}
+ext4load mmc ${mmcdev}:${rootpartnum} ${comp_addr} /boot/Image.gz
+unzip ${comp_addr} ${kernel_addr_r}
+ext4load mmc ${mmcdev}:${rootpartnum} ${fdt_addr_r} /boot/dtb/ti/${fdtfile}
 ext4load mmc ${mmcdev}:${rootpartnum} ${ramdisk_addr_r} /boot/initramfs
 setenv ramdisk_size ${filesize}
 

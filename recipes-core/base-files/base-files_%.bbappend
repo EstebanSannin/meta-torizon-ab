@@ -11,8 +11,15 @@
 
 FILESEXTRAPATHS:prepend:torizon-ab := "${THISDIR}/files:"
 
+# The x86 fstab mounts the ESP at /boot/efi (grubenv lives there). AM62p (U-Boot)
+# has no ESP, so it uses a variant without that line — mounting the nonexistent
+# efi label otherwise drops the boot into emergency mode.
+TORIZON_AB_FSTAB ?= "fstab-torizon-ab"
+TORIZON_AB_FSTAB:verdin-am62p = "fstab-torizon-ab-am62"
+
 SRC_URI:append:torizon-ab = " file://fstab-torizon-ab"
+SRC_URI:append:verdin-am62p = " file://fstab-torizon-ab-am62"
 
 do_install:append:torizon-ab () {
-    install -m 0644 ${WORKDIR}/fstab-torizon-ab ${D}${sysconfdir}/fstab
+    install -m 0644 ${WORKDIR}/${TORIZON_AB_FSTAB} ${D}${sysconfdir}/fstab
 }

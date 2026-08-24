@@ -204,6 +204,13 @@ timestamp is the unambiguous discriminator vs. whatever was on eMMC before.
   don't depend on it.
 - Loading Tezi into RAM is **non-destructive**; eMMC is only touched once Tezi
   actually installs. Safe to load Tezi just to poke around.
+- **Reading/writing the U-Boot env: prefer `fw_printenv`/`fw_setenv` from booted
+  Linux** over catching the autoboot prompt. The running OS has `libubootenv-bin`
+  + `/etc/fw_env.config`, so `fw_printenv` dumps the whole env and `fw_setenv`
+  edits it, non-disruptively, no power-cycle. This is the same env RAUC's uboot
+  backend uses — handy for verifying/poking `BOOT_ORDER`/`BOOT_<slot>_LEFT`
+  during rollback bring-up. Interrupting autoboot (spam keys to `ttyUSB0` during
+  the 1 s window) is only needed when there is no bootable OS to log into.
 
 ---
 

@@ -1,0 +1,28 @@
+# short-description: Torizon OS A/B (RAUC) — Verdin AM62p (TI K3 / U-Boot)
+# long-description:
+#   A/B dual-rootfs eMMC/SD layout for the RAUC backend on the Verdin AM62p.
+#     p1 /boot vfat  label=boot  part-name=boot     - FAT boot: our A/B boot.scr
+#                                                      (the slot SELECTOR that
+#                                                      U-Boot's bootflow/script
+#                                                      bootmeth runs)
+#     p2 /     ext4  part-name=rootfs_a             - rootfs slot A (factory)
+#     p3       ext4  part-name=rootfs_b             - rootfs slot B (empty)
+#     p4 /var  ext4  part-name=data label=data      - shared persistent data
+#
+#   RAUC addresses the slots by GPT PARTLABEL (rootfs_a/rootfs_b), which survives
+#   a raw ext4 write. Kernel (Image.gz) + DTB + initramfs live in EACH rootfs
+#   slot's /boot and are ext4load'd by boot.scr from the selected slot.
+#
+#   The TI boot firmware (tiboot3/tispl/u-boot) is NOT in this image — on AM62p
+#   it lives in the eMMC boot0 HW partition, written separately by the Tezi
+#   image.json wrapper used to flash this .wic.
+#
+#   boot.scr comes from rauc-uboot-ab (deployed to DEPLOY_DIR_IMAGE); it is
+#   staged into the FAT partition via IMAGE_BOOT_FILES = "boot.scr".
+
+part /boot --source bootimg-partition --ondisk mmcblk0 --fstype=vfat --label boot --part-name boot --active --align 1024 --fixed-size 128 --no-fstab-update
+part /     --source rootfs --ondisk mmcblk0 --fstype=ext4 --part-name rootfs_a --align 1024 --fixed-size 1536 --no-fstab-update
+part       --ondisk mmcblk0 --fstype=ext4 --part-name rootfs_b --align 1024 --fixed-size 1536 --no-fstab-update
+part /var  --ondisk mmcblk0 --fstype=ext4 --label data --part-name data --align 1024 --fixed-size 1024 --no-fstab-update
+
+bootloader --ptable gpt

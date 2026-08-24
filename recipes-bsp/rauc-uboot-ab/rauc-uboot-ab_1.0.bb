@@ -10,7 +10,7 @@ DRAFT: the boot.scr load flow needs bring-up iteration on real hardware."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 
-inherit systemd
+inherit systemd deploy
 
 # TI (Verdin AM62p) / U-Boot only.
 COMPATIBLE_MACHINE = "verdin-am62p"
@@ -61,3 +61,12 @@ FILES:${PN} = " \
     ${systemd_unitdir}/system/rauc-ubootenv-create.service \
     ${sysconfdir}/greenboot/green.d/00_rauc_mark_good.sh \
 "
+
+# Also deploy boot.scr to DEPLOY_DIR_IMAGE so the wks (bootimg-partition) can
+# stage it into the FAT boot partition — this A/B boot.scr is the slot SELECTOR
+# that U-Boot's bootflow/script bootmeth runs.
+do_deploy() {
+    install -d ${DEPLOYDIR}
+    install -m 0644 ${WORKDIR}/boot.scr ${DEPLOYDIR}/boot.scr
+}
+addtask deploy after do_compile before do_build
