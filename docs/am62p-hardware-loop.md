@@ -40,6 +40,24 @@ SSH) must run on beerus**, not m920x. Copy build artifacts `m920x → Mac → be
 which the machine config already selects). Boots from **eMMC (MMC1)**.
 `MACHINE=verdin-am62p`, kernel `linux-toradex-ti`, bootloader `u-boot-toradex-ti`.
 
+### On-device access (SSH) — for on-target work (rauc install, rollback)
+Once an A/B image is booted, drive the board over the network (nicer than serial
+for `rauc install` / `rauc status` / `fw_printenv`). Add a `verdin` alias to your
+`~/.ssh/config` (dev board: host keys change every reflash, so don't persist them):
+```
+Host verdin
+  HostName 192.168.1.10        # the board's DHCP lease (find via arp/ping from beerus)
+  User torizon
+  IdentityFile ~/.ssh/ota_ce_vm
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+```
+First-boot bootstrap (once per fresh flash): the `torizon` user forces a password
+change at first login — do it over serial, then add your SSH pubkey to
+`~torizon/.ssh/authorized_keys`, then have a human enable passwordless sudo
+(`/etc/sudoers.d/90-torizon-nopw`). The dev password is kept out of this repo —
+see the project's private notes. NEVER script the password into `sudo`.
+
 ### Serial console (beerus)
 Yavia debug bridge = **Silicon Labs CP2105 dual UART**:
 - `/dev/ttyUSB0` (CP2105 interface 0) = **A53 Linux/U-Boot console** — use this.

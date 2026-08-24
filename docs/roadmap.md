@@ -9,6 +9,27 @@ Legend: **AC** = acceptance criteria.
 
 ---
 
+## Verdin AM62p (real hardware) — bring-up status
+
+The RAUC A/B variant is now proven on a physical Verdin AM62p (TI K3, U-Boot),
+not just QEMU. Branch `feature/rauc-ab-am62p`. See `docs/am62p-hardware-loop.md`.
+
+- **M0 (Done)** — reference build + headless Tezi autoinstall flash loop.
+- **M1 (Done)** — A/B RAUC image builds & boots slot A (`rauc-uboot-ab` U-Boot
+  backend, `torizon-ab-rauc-am62.wks`, squashfs on the TI kernel).
+- **M2 (Done)** — local `rauc install` A→B; greenboot `mark-good` confirms the slot.
+- **M3 (Done)** — rollback (`rauc status mark-bad` → U-Boot boots the good slot).
+- **Automount hardening (Done)** — inactive-slot exclusion works by PARTLABEL +
+  defensive unmount (not just x86 ext4 labels).
+- **x86-ism audit fix (Done)** — no-ESP fstab is now the default; only x86 mounts
+  the ESP (fixed a latent imx8mp emergency-mode boot under both backends).
+- **M4 (Todo)** — Torizon Cloud + aktualizr A→B on hardware (the aktualizr
+  reboot-race, see `rauc-decisions.md`, will resurface).
+- **imx8mp (Todo)** — resume the draft port; known latent bug: `uboot-ab`
+  `boot.cmd` loads the DTB from a flat `/boot/` path (same class as the AM62p fix).
+
+---
+
 ## Delivered (Done)
 
 These are already implemented and validated on `genericx86-64` (QEMU) unless noted.

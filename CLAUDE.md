@@ -70,10 +70,22 @@ bitbake torizon-ab-bundle                  # RAUC payload (signed)
 ```
 
 First/primary target is `genericx86-64` (QEMU). `verdin-imx8mp` (U-Boot) is
-draft scaffolding. **`verdin-am62p` (TI K3, U-Boot) is the real-hardware target**
-— a physical board is available and the full **build → flash → serial loop is
-working** (see `docs/am62p-hardware-loop.md`). The per-machine bootloader glue is
-isolated (`grub-ab`/`uboot-ab`, `rauc-grub-ab`, wks) to keep each port tractable.
+draft scaffolding (and carries dormant x86 assumptions — see below).
+**`verdin-am62p` (TI K3, U-Boot) is the real-hardware, primary target** and is
+**proven end-to-end on a physical board**: the A/B RAUC image builds, flashes
+headlessly (Tezi), boots slot A, takes a `rauc install` A→B update, and rolls
+back a bad slot — all via the RAUC U-Boot backend (`rauc-uboot-ab`,
+`bootloader=uboot`, `BOOT_ORDER`/`BOOT_<slot>_LEFT`). See
+`docs/am62p-hardware-loop.md` for the build→flash→serial loop and on-device
+access. The per-machine bootloader glue is isolated (`grub-ab`/`uboot-ab`,
+`rauc-grub-ab`/`rauc-uboot-ab`, per-machine wks) to keep each port tractable.
+
+**Portability rule (learned the hard way on AM62p):** x86/GRUB/EFI was only a
+bring-up vehicle; the primary targets are ARM SoMs. Never let an x86 assumption
+(`/boot/efi`, `LABEL=efi`, grubenv, `sda`, bzImage, flat DTB path) sit in shared
+`:torizon-ab` code — scope the x86 case to `:genericx86-64`/`:intel-corei7-64`
+and make the ARM/no-ESP path the DEFAULT, so a new SoM can't silently inherit it
+(e.g. `TORIZON_AB_FSTAB` defaults to the no-ESP fstab; x86 opts in).
 
 ## Hardware test loop (Verdin AM62p) — read `docs/am62p-hardware-loop.md`
 
