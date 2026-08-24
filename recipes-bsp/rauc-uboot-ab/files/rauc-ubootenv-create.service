@@ -1,0 +1,14 @@
+[Unit]
+Description=Seed RAUC U-Boot A/B boot-selection env (BOOT_ORDER) if missing
+DefaultDependencies=no
+After=local-fs.target
+Before=sysinit.target greenboot-healthcheck.service
+ConditionPathExists=/etc/fw_env.config
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/rauc-ubootenv-create.sh
+
+[Install]
+WantedBy=sysinit.target

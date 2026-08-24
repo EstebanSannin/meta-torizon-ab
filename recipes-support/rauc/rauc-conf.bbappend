@@ -11,28 +11,39 @@ RAUC_KEYRING_FILE:torizon-ab-rauc = "keyring.pem"
 
 RAUC_COMPATIBLE ??= "torizon-ab-rauc-${MACHINE}"
 
+# RAUC bootloader backend per machine:
+#   x86         -> grub  (RAUC reads/writes ORDER/*_OK/*_TRY in the grubenv)
+#   verdin-am62p-> uboot (RAUC reads/writes BOOT_ORDER/BOOT_<slot>_LEFT in the
+#                         U-Boot env via fw_setenv; see recipes-bsp/rauc-uboot-ab)
+RAUC_SYSTEM_BOOTLOADER            ?= "grub"
+RAUC_SYSTEM_BOOTLOADER:verdin-am62p = "uboot"
+
 # The base recipe installs the example system.conf; overwrite it with ours.
+# The [system] bootloader line differs by backend; the grubenv path is emitted
+# only for the grub backend (the uboot backend locates its env via fw_env.config).
 do_install:append:torizon-ab-rauc () {
-    cat > ${D}${sysconfdir}/rauc/system.conf <<EOF
-[system]
-compatible=${RAUC_COMPATIBLE}
-bootloader=grub
-grubenv=/boot/efi/EFI/BOOT/grubenv
-data-directory=/var/lib/rauc
-# The running slot is also passed to userspace via 'rauc.slot=' on the kernel
-# command line (see wic/grub-rauc.cfg).
-
-[keyring]
-path=/etc/rauc/keyring.pem
-
-[slot.rootfs.0]
-device=/dev/disk/by-partlabel/${TORIZON_AB_PARTLABEL_A}
-type=ext4
-bootname=A
-
-[slot.rootfs.1]
-device=/dev/disk/by-partlabel/${TORIZON_AB_PARTLABEL_B}
-type=ext4
-bootname=B
-EOF
+    {
+        echo "[system]"
+        echo "compatible=${RAUC_COMPATIBLE}"
+        echo "bootloader=${RAUC_SYSTEM_BOOTLOADER}"
+        if [ "${RAUC_SYSTEM_BOOTLOADER}" = "grub" ]; then
+            echo "grubenv=/boot/efi/EFI/BOOT/grubenv"
+        fi
+        echo "data-directory=/var/lib/rauc"
+        echo "# The running slot is also passed to userspace via 'rauc.slot=' on the"
+        echo "# kernel command line (see the machine's boot config)."
+        echo ""
+        echo "[keyring]"
+        echo "path=/etc/rauc/keyring.pem"
+        echo ""
+        echo "[slot.rootfs.0]"
+        echo "device=/dev/disk/by-partlabel/${TORIZON_AB_PARTLABEL_A}"
+        echo "type=ext4"
+        echo "bootname=A"
+        echo ""
+        echo "[slot.rootfs.1]"
+        echo "device=/dev/disk/by-partlabel/${TORIZON_AB_PARTLABEL_B}"
+        echo "type=ext4"
+        echo "bootname=B"
+    } > ${D}${sysconfdir}/rauc/system.conf
 }

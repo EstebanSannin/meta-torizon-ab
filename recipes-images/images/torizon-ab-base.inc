@@ -28,6 +28,7 @@ CORE_IMAGE_BASE_INSTALL:append = " \
 "
 # Device trees are needed on ARM (U-Boot loads the DTB); x86 has none.
 CORE_IMAGE_BASE_INSTALL:append:verdin-imx8mp = " kernel-devicetree"
+CORE_IMAGE_BASE_INSTALL:append:verdin-am62p  = " kernel-devicetree"
 
 # Install the initramfs alongside the kernel in each rootfs slot's /boot so GRUB
 # can load it (root=LABEL= is resolved by the initramfs, not the kernel). Kept
@@ -121,6 +122,9 @@ CORE_IMAGE_BASE_INSTALL:append:torizon-ab-swupdate:verdin-imx8mp   = " uboot-ab"
 # RAUC backend: RAUC's native grub bootloader backend + its grubenv bootstrap.
 CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc:genericx86-64       = " rauc-grub-ab"
 CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc:intel-corei7-64     = " rauc-grub-ab"
+# RAUC backend on TI (Verdin AM62p): RAUC's native u-boot backend + BOOT_ORDER
+# bootstrap + the A/B boot.scr (see recipes-bsp/rauc-uboot-ab).
+CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc:verdin-am62p        = " rauc-uboot-ab"
 
 # The rootfs subsystem secondary + swupdate_actions.sh handler are added to the
 # shared aktualizr secondaries via a bbappend to aktualizr-default-sec (pulled
