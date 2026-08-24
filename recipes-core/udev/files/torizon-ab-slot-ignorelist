@@ -1,23 +1,41 @@
 #!/bin/sh
-# Add the A/B rootfs slot device nodes to usermount's ignore list so the
-# automounter never mounts them (SWUpdate raw-writes the inactive slot).
-# Runs at boot before usermount; resolves labels to device nodes each time so
-# it adapts to sda/vda/nvme and to whichever slot is active.
-set -eu
+# Keep the A/B rootfs slots (and the FAT boot partition) out of BOTH automounters
+# (Torizon's usermount + udisks2) so rauc/SWUpdate can raw-write the inactive
+# slot. Two jobs:
+#   1. Add the slot device nodes to usermount's ignorelist.
+#   2. Defensively UNMOUNT any slot/boot partition that a boot-time race already
+#      auto-mounted under /media (udisks2 can win the race against its own
+#      UDISKS_IGNORE udev rule during early boot). Once unmounted, the udev rule
+#      / ignorelist keep it unmounted.
+# Slots are resolved by BOTH the ext4 FS label (SWUpdate/x86: otaroot_a|b) and
+# the GPT PARTLABEL (RAUC/ARM: rootfs_a|b), so one script serves every machine.
+# The active slot (mounted as /) is always left alone.
+set -u
 
 LIST="/etc/usermount/ignorelist"
-
-# Make sure the by-label symlinks exist.
 command -v udevadm >/dev/null 2>&1 && udevadm settle || true
-
 mkdir -p /etc/usermount
 touch "$LIST"
 
-for label in otaroot_a otaroot_b; do
-    dev="$(readlink -f "/dev/disk/by-label/${label}" 2>/dev/null || true)"
-    if [ -n "${dev}" ] && ! grep -xqs "${dev}" "$LIST"; then
-        echo "${dev}" >> "$LIST"
+# Device backing / — never touch the active slot.
+ROOTDEV="$(findmnt -no SOURCE / 2>/dev/null | sed 's/\[.*\]//')"
+ROOTREAL="$(readlink -f "$ROOTDEV" 2>/dev/null || echo "$ROOTDEV")"
+
+for path in \
+    /dev/disk/by-label/otaroot_a /dev/disk/by-label/otaroot_b \
+    /dev/disk/by-partlabel/rootfs_a /dev/disk/by-partlabel/rootfs_b \
+    /dev/disk/by-partlabel/boot ; do
+    dev="$(readlink -f "$path" 2>/dev/null || true)"
+    # only real block devices (skips labels absent on a given machine/backend)
+    [ -n "${dev}" ] && [ -b "${dev}" ] || continue
+
+    # 1. usermount ignorelist (dedup)
+    grep -xqs "${dev}" "$LIST" || echo "${dev}" >> "$LIST"
+
+    # 2. defensive unmount — but never the active root slot
+    [ "${dev}" = "${ROOTREAL}" ] && continue
+    if [ -n "$(findmnt -nro TARGET -S "${dev}" 2>/dev/null)" ]; then
+        umount "${dev}" 2>/dev/null || umount -l "${dev}" 2>/dev/null || true
     fi
 done
-
 exit 0

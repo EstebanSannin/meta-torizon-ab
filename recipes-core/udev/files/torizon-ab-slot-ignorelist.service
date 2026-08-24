@@ -1,7 +1,7 @@
 [Unit]
-Description=Exclude A/B rootfs slots from the usermount automounter
+Description=Exclude A/B rootfs slots from the automounters (usermount + udisks2)
 After=local-fs.target systemd-udevd.service
-Before=usermount.service
+Before=usermount.service udisks2.service
 
 [Service]
 Type=oneshot
