@@ -73,11 +73,14 @@ First/primary target is `genericx86-64` (QEMU). `verdin-imx8mp` (U-Boot) is
 draft scaffolding (and carries dormant x86 assumptions — see below).
 **`verdin-am62p` (TI K3, U-Boot) is the real-hardware, primary target** and is
 **proven end-to-end on a physical board**: the A/B RAUC image builds, flashes
-headlessly (Tezi), boots slot A, takes a `rauc install` A→B update, and rolls
-back a bad slot — all via the RAUC U-Boot backend (`rauc-uboot-ab`,
-`bootloader=uboot`, `BOOT_ORDER`/`BOOT_<slot>_LEFT`). See
+headlessly (Tezi), boots slot A, takes a `rauc install` A→B update, rolls
+back a bad slot, and takes a **full Torizon Cloud + aktualizr OTA update A→B**
+(provisioned + package uploaded + update launched entirely via the REST API,
+reported `Completed`, rollback slot retained) — all via the RAUC U-Boot backend
+(`rauc-uboot-ab`, `bootloader=uboot`, `BOOT_ORDER`/`BOOT_<slot>_LEFT`). See
 `docs/am62p-hardware-loop.md` for the build→flash→serial loop and on-device
-access. The per-machine bootloader glue is isolated (`grub-ab`/`uboot-ab`,
+access, and `docs/rauc-cloud-test.md` for the cloud path (incl. the API-driven
+runbook and the real-HW reboot-race finding). The per-machine bootloader glue is isolated (`grub-ab`/`uboot-ab`,
 `rauc-grub-ab`/`rauc-uboot-ab`, per-machine wks) to keep each port tractable.
 
 **Portability rule (learned the hard way on AM62p):** x86/GRUB/EFI was only a
@@ -112,11 +115,14 @@ commands, and every gotcha are in `docs/am62p-hardware-loop.md`.
 - Some build hosts have a **broken IPv6 route to CDNs** (e.g. gnome) → force
   `wget` to IPv4 in the *build dir's* `local.conf` (`FETCHCMD_wget += --inet4-only`),
   not in this layer.
-- **RAUC reboot race (OPEN):** the handler touching `/run/need-reboot` inside the
-  install action can outrun aktualizr's durable `kPending` write, so the cloud
-  reports the update *failed* even though the device updated. Fix direction is
-  **observed-state reconciliation via `get-firmware-info`** — **not** a
-  `sleep`/timing hack (not power-cut safe). See `docs/rauc-decisions.md`.
+- **RAUC reboot race (did NOT reproduce on real HW):** the handler touching
+  `/run/need-reboot` inside the install action can, in theory, outrun aktualizr's
+  durable `kPending` write, making the cloud report *failed* even though the device
+  updated (seen on QEMU). On the real Verdin AM62p the cloud OTA reported
+  **Completed** — the slow reboot (~1.5 min) let aktualizr record `kPending` first
+  and reconcile on boot. The **observed-state reconciliation via `get-firmware-info`**
+  fix is thus defence-in-depth (fast-rebooting targets / power-cut), **not** a
+  blocker; still **not** a `sleep`/timing hack. See `docs/rauc-decisions.md`.
 
 ## Conventions
 

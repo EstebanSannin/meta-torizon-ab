@@ -7,9 +7,12 @@ bring-up (build host + QEMU + Torizon Cloud).
 
 Status: validated on `genericx86-64` (QEMU) — builds, boots slot A, local
 `rauc install` A→B, and a full **Torizon Cloud + aktualizr** update that applies
-A→B on the device with the previous slot retained for rollback. One known issue
-remains under investigation: aktualizr can report that cloud update as *failed*
-even though the device updated correctly — the **reboot race** (see Open items).
+A→B on the device with the previous slot retained for rollback. **Also validated
+end-to-end on real hardware (Verdin AM62p, U-Boot backend, 2026-08-25):** the same
+cloud path (provision → upload `.raucb` → launch → apply → reboot → rollback slot
+retained) works, driven headlessly via the REST API, and reports **Completed** —
+the **reboot race did not reproduce** there (real-HW reboot latency ≫ aktualizr's
+`kPending` write). See [rauc-cloud-test.md](./rauc-cloud-test.md) and Open items.
 
 ## Context and goal
 
@@ -161,6 +164,22 @@ RAUC-specific (`:torizon-ab-rauc`): `rauc` + `rauc-conf` (system.conf + keyring)
   point — RAUC arming the bootloader — already is). Open sub-decision: observed-
   state alone vs. also re-sequencing the reboot so aktualizr records `kPending`
   first (for the discrete "install succeeded" cloud event).
+  - **Update (2026-08-25): did NOT reproduce on real Verdin AM62p hardware.** A
+    full cloud A→B (via the REST API, see
+    [rauc-cloud-test.md](./rauc-cloud-test.md)) reported **Completed / UpToDate**.
+    On boot aktualizr found the update already `kPending` and reconciled from the
+    secondary's installed state (*"Trying to complete pending update … has been
+    installed"*). The real-hardware reboot latency (greenboot + plymouth +
+    shutdown, ~1.5 min) comfortably exceeds aktualizr's durable `kPending` write,
+    so the QEMU race window is lost. This makes the observed-state hardening a
+    **robustness/defence-in-depth** item (fast-rebooting targets, power-cut) rather
+    than a functional blocker on this class of hardware.
+- **Startup SSL-58 posting update *events* (new, minor).** Right after a
+  post-update boot, aktualizr emits a one-shot burst of
+  `curl error 58 … Problem with the local SSL certificate` while posting update
+  *events*; the core manifest report still succeeds (device reaches `Completed`).
+  Likely a transient before TLS/clock/cert settles at early boot. Characterize;
+  non-blocking.
 - Production signing keys (replace the in-tree dev key/cert/keyring).
 - Multi-disk-robust slot selection in `grub-rauc.cfg` (GPT-position assumption).
 - `verity` bundles + delta/casync updates.

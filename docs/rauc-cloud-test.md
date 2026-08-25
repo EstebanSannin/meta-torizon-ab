@@ -108,6 +108,67 @@ findmnt -no SOURCE /         # /dev/disk/by-partlabel/rootfs_<a|b>
 sudo rauc status             # booted=<new slot> good; other slot retained (rollback)
 ```
 
+## Verified on real hardware — Verdin AM62p (2026-08-25)
+
+The full cloud path was driven **headlessly via the Torizon Cloud REST API**
+(base `https://app.torizon.io/api/v2`, Bearer auth) against a physical Verdin
+AM62p, board on slot B → cloud update **B→A**. See
+[am62p-hardware-loop.md](./am62p-hardware-loop.md) for board access.
+
+**Provisioning the running board (no reflash), API-driven.** The stock image is
+DeviceCred/implicit (`/usr/lib/sota/conf.d/20-sota-device-cred.toml` → aktualizr
+imports `/var/sota/import/{client.pem,pkey.pem}`, CA `/usr/lib/sota/root.crt`,
+gateway `dgw.torizon.io`). A Torizon Cloud `credentials.zip` gives two narrowly
+scoped OAuth2 clients (`client_credentials` grant at the `kc.torizon.io`
+`ota-users` realm): a **provision** client (`create:devices`) and a **garage-tools**
+client (repo/TUF). Steps:
+1. `POST /devices {deviceId,deviceName}` with the provision token → returns a
+   per-device zip (`client.pem`, `pkey.pem`, `root.crt`, `gateway.url`, `info.json`
+   with the deviceUuid).
+2. Install `client.pem`+`pkey.pem` into `/var/sota/import/` (root:root, 0600) —
+   the service is gated by `ConditionPathExists=|/var/sota/import/pkey.pem`.
+3. `systemctl start aktualizr-torizon` → it imports the creds, registers the
+   primary + secondaries (incl. `<machine>-rootfs`), `Provisioned on server: yes`.
+
+**The provision + garage-tools clients cannot reach `/packages` or `/updates`
+(403).** Uploading a package and launching an update need a **broader API client**
+(scopes incl. `write:packages`, `write:updates`, `read:devices`) — create one in
+the Torizon Cloud console. Then, entirely via API:
+- **Upload:** `POST /packages?name=<n>&version=<v>&hardwareId=<machine>-rootfs&targetFormat=BINARY`
+  with `Content-Type: application/octet-stream` and the `.raucb` as the body
+  (`--data-binary @file`; curl sets `Content-Length`). The resulting
+  `packageId = <name>-<version>`.
+- **Launch:** `POST /updates {"packageIds":["<packageId>"],"devices":["<uuid>"]}`
+  → `201` with `{affected:[…]}` (note: **no** `updateId` in this response — read
+  per-device status via `GET /updates/devices/{uuid}`). `PATCH /updates/{id}`
+  cancels while still *Pending*.
+- Force an immediate check instead of waiting for the 300 s poll:
+  `systemctl restart aktualizr-torizon` on the device.
+- **Status:** `GET /updates/devices/{uuid}` (→ `Completed`), `GET /devices?deviceUuid=…`
+  (→ `UpToDate`). App-API list responses use a `{"values":[…]}` envelope.
+
+**Result:** download + Uptane-verify → `rauc install` to inactive slot A → armed
+`BOOT_ORDER=A B`/`BOOT_A_LEFT=3` → pending-reboot rebooted → U-Boot
+`RAUC: booting slot A` → `rauc.slot=A`/`root=PARTLABEL=rootfs_a` → greenboot
+`mark-good` → `rauc status`: booted A good, **slot B retained good (rollback
+intact)**; cloud reports **Completed / UpToDate**.
+
+**The reboot race did *not* reproduce on this hardware.** On boot aktualizr logged
+*"current update is pending → Trying to complete pending update … on Secondary
+<rootfs> → has been installed → No pending update for Primary"* and reported
+success — i.e. it durably recorded `kPending` **before** the (slow: greenboot +
+plymouth + shutdown, ~1.5 min) reboot, then reconciled from the secondary's
+installed state on the next boot. Real-hardware reboot latency comfortably exceeds
+aktualizr's `kPending` write, so the QEMU-observed window is lost. The
+`get-firmware-info` observed-state hardening in [rauc-decisions.md](./rauc-decisions.md)
+is therefore a belt-and-suspenders robustness item here, not a functional blocker
+(still worthwhile for fast-rebooting targets / power-cut safety).
+
+*Minor wart:* a one-shot startup burst `curl error 58 … Problem with the local
+SSL certificate` while posting update **events** right after boot (before TLS
+settled); the core manifest report still succeeded (cloud went `Completed`). Worth
+characterizing, non-blocking.
+
 ## Notes / gotchas
 
 - The bundle is **plain**-format and **dev-signed** (`/etc/rauc/keyring.pem` is a
