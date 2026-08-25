@@ -12,10 +12,6 @@
 
 require conf/distro/include/common-torizon.inc
 
-# Per-family / per-machine data for the U-Boot A/B glue (the porting-contract
-# surface). Harmless on non-U-Boot machines (nothing consumes it there).
-require conf/distro/include/torizon-ab-uboot.inc
-
 # Distro-specific override so recipes can use ':torizon-ab' for content shared
 # by both backends. The backend-specific token (':torizon-ab-swupdate' /
 # ':torizon-ab-rauc') is appended by the including distro conf.

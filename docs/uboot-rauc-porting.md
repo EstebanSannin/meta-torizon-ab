@@ -1,153 +1,195 @@
-# Porting the U-Boot RAUC A/B variant to a new machine
+# U-Boot A/B boot architecture & porting guide
 
-This is the **porting contract**: the short, concrete checklist to bring the RAUC
-A/B Torizon OS variant (`DISTRO=torizon-ab-rauc`) to a new U-Boot machine. It was
-factored from two grounded targets — **Verdin AM62p** (TI K3) and **Verdin
-i.MX8MP** (NXP) — so most of the work is already done for you: a new machine in
-either SoC family supplies only a small data block, not new logic.
+How the OSTree-free A/B variant boots on U-Boot machines, why it is structured
+this way, and what it takes to add a new machine. Read this before porting to a
+new board — in the common case there is **nothing per-machine to write**.
 
-Everything **below the aktualizr generic-secondary seam** (the `rauc_actions.sh`
-handler, the cloud OTA path) is machine-agnostic and needs **no** porting work —
-see [rauc-cloud-test.md](./rauc-cloud-test.md). This document is only about the
-bits **below** the seam: the bootloader glue, the disk layout, and flashing.
+Applies to both backends (RAUC and SWUpdate); the only per-backend difference is
+the slot-selection preamble (see [Backends](#backends)).
 
 ---
 
-## The three tiers of variation
+## The one principle: own slot selection, delegate the kernel boot
 
-The U-Boot RAUC glue is split so a port touches as little as possible:
+An A/B boot is two separable jobs:
 
-| Tier | What it is | Where it lives | Keyed on |
-|------|-----------|----------------|----------|
-| **1 — common** | RAUC `uboot` backend, `BOOT_ORDER`/`BOOT_<slot>_LEFT`, the templated `boot.cmd` (runtime GPT-label slot resolution, env-sourced load addresses), the shared A/B wks, the `fw_env.config` *mechanism*, the greenboot `mark-good` hook | `recipes-bsp/rauc-uboot-ab`, `wic/torizon-ab-rauc-uboot.wks` | all U-Boot RAUC machines |
-| **2 — SoC family** | DTB directory under `/boot`; boot-firmware flashing method; recovery method | `conf/distro/include/torizon-ab-uboot.inc` (data) + the Tezi wrapper (method) | SoC-family override (`:k3`, `:mx8mp-generic-bsp`, …) |
-| **3 — per-machine** | device-tree file (module+carrier); mmc index; decompress scratch (only if `loadaddr==kernel_addr_r`) | `conf/distro/include/torizon-ab-uboot.inc` | machine override (`:verdin-am62p`, …) |
+1. **Slot selection** — *"which rootfs partition do we boot this time?"* This is
+   **ours**. Its shape is universal (pick a slot → boot that partition → pass
+   `rauc.slot=`/`root=`); only the *counter mechanism* is backend-specific
+   (RAUC's `BOOT_ORDER`/`BOOT_<slot>_LEFT` vs SWUpdate's `bootcount`). It is ~15
+   lines and it is the **only** thing this layer owns about booting.
 
-The single file you edit for Tiers 2–3 is
-**`conf/distro/include/torizon-ab-uboot.inc`**. The boot firmware is *not* in the
-`.wic`; it is laid down separately by the per-family Tezi wrapper at flash time.
+2. **Kernel load + boot** — *"given a partition, load its kernel/dtb/initramfs
+   with the right addresses, decompression, dtb path, overlays and boot it."*
+   This is the **machine's** job. Every BSP already solves it, and — crucially —
+   the machine-specific facts are exposed as **stable OpenEmbedded metadata
+   variables**, not baked into any single vendor's boot script.
 
----
+We therefore **own a small, generic boot script** that does slot selection and
+then loads the kernel using those stable variables. We deliberately do **not**
+depend on the BSP's own boot script (`meta-toradex-bsp-common`'s
+`u-boot-distro-boot/boot.cmd.in`).
 
-## Porting checklist
+### Why not just reuse the BSP boot script?
 
-### 0. Find your SoC-family override token (don't guess it)
+Because coupling to it is fragile: it is maintained by a different team, changes
+without notice, and a change can break us loudly (crash) or — worse — silently.
+**Torizon OS itself made exactly this call:** `meta-toradex-torizon` ships its
+*own* complete `u-boot-distro-boot.bb` (its own `boot.cmd.in`, `PROVIDES =
+"u-boot-default-script"`) that overrides the BSP-common one, precisely to
+insulate the product from that team. We do the same.
 
-The family axis rides the BSP's own SoC-family `MACHINEOVERRIDES`. Confirm the real
-token before using it — the human-friendly name in the machine `.conf` is often
-reformed by the BSP includes (e.g. NXP's bare `mx8mp` becomes `mx8mp-generic-bsp`):
-
-```sh
-DISTRO=torizon-ab-rauc MACHINE=<your-machine> ./bb.sh -e 2>/dev/null \
-  | grep -E "^(OVERRIDES|MACHINEOVERRIDES)=" | tr ':' '\n'
-```
-
-Known tokens: TI K3 → **`k3`**; NXP i.MX8M Plus → **`mx8mp-generic-bsp`**.
-
-### 1. Add the per-machine + family data block
-
-In `conf/distro/include/torizon-ab-uboot.inc`:
-
-```
-# Tier-2 (only if your SoC family isn't already listed): DTB directory under /boot.
-# Find the real path with: debugfs -R "ls /boot" <rootfs.ext4>  (it varies by vendor
-# kernel: TI = /boot/dtb/ti, NXP linux-toradex = /boot/freescale).
-TORIZON_AB_DTB_DIR:<family>        = "/boot/<vendor-specific>"
-
-# Tier-3: the device-tree file for this module + carrier.
-TORIZON_AB_FDTFILE:<machine>       = "<soc>-<module>-<carrier>.dtb"
-
-# Tier-3 (only if not the defaults): mmc index, decompress scratch address.
-TORIZON_AB_MMCDEV:<machine>        = "0"          # default 0
-TORIZON_AB_KERNEL_SCRATCH:<machine> = "0x........" # only used if loadaddr==kernel_addr_r
-```
-
-The DTB **file name** is per-machine (module + carrier); the DTB **directory** is
-per-family (vendor kernel: TI installs to `ti/`, NXP to `freescale/`). Load
-addresses (`kernel_addr_r`/`fdt_addr_r`/`ramdisk_addr_r`/`loadaddr`) are **not**
-data here — `boot.cmd` reads them from the board's own U-Boot environment.
-
-If you forget the block, `rauc-uboot-ab`'s `do_compile` fails loudly with a
-pointer back here (it will not silently ship a broken `boot.scr`).
-
-### 2. Make the glue compatible with the machine
-
-- `recipes-bsp/rauc-uboot-ab/rauc-uboot-ab_1.0.bb`: add the machine to
-  `COMPATIBLE_MACHINE = "verdin-am62p|verdin-imx8mp|<your-machine>"`.
-- If your SoC family is new, add the family-scoped wiring (mirroring `:k3` /
-  `:mx8mp-generic-bsp`) in:
-  - `conf/distro/torizon-ab-rauc.conf` — `WKS_FILE` + `IMAGE_FSTYPES` (wic).
-  - `recipes-support/rauc/rauc-conf.bbappend` — `RAUC_SYSTEM_BOOTLOADER = "uboot"`.
-  - `recipes-images/images/torizon-ab-base.inc` — install `rauc-uboot-ab`,
-    `IMAGE_BOOT_FILES = "boot.scr"`, and the `do_image_wic[depends]` on
-    `rauc-uboot-ab:do_deploy`.
-  - `recipes-kernel/linux/<your-kernel>_%.bbappend` — add `rauc-squashfs.cfg`
-    (RAUC mounts the bundle squashfs on-target; a hard requirement).
-
-If your machine is in an **existing** family (`k3` / `mx8mp-generic-bsp`), steps
-under "new SoC family" are already done — you only do step 1 + the
-`COMPATIBLE_MACHINE` line.
-
-### 3. Build-green + static verification (no board needed)
-
-```sh
-DISTRO=torizon-ab-rauc MACHINE=<machine> ./bb.sh torizon-minimal-ab torizon-ab-bundle
-```
-
-Then verify the artifacts without hardware:
-
-```sh
-cd build-rauc/deploy/images/<machine>
-# boot.scr baked the right values, no @@ placeholders, GPT-label resolution present:
-tail -c +65 boot.scr | grep -aE "dtb_dir|fdtfile|part number|@@"
-# wic GPT part-names:
-parted -s -m torizon-minimal-ab-<machine>.wic print   # expect boot/rootfs_a/rootfs_b/data
-# system.conf:
-debugfs -R "cat /etc/rauc/system.conf" torizon-minimal-ab-<machine>-*.ext4  # bootloader=uboot
-```
-
-### 4. The Tezi flash wrapper (Tier-2 method — needed for on-device M0)
-
-The boot firmware is written **separately** from the `.wic`, and *how* differs by
-SoC family. Adapt the stock machine's Tezi `image.json`:
-
-| | TI K3 (am62p) | NXP i.MX (imx8mp) |
-|---|---|---|
-| Boot firmware | `tiboot3` + `tispl` + `u-boot.img` | single `imx-boot` blob |
-| Written to | eMMC **boot0** at seeks 0 / 1024 / 5120 | eMMC at `IMX_BOOT_SEEK` (imx8mp: **32 KiB**) |
-| Recovery to load Tezi | `dfu-util` + `recovery-linux.sh` | **SDP + `uuu`** (NXP) |
-
-> ⚠️ **i.MX flash risk:** confirm the `imx-boot` blob fits before the first GPT
-> partition (p1 is 1 MiB-aligned; `imx-boot` starts at 32 KiB) — check the stock
-> Verdin i.MX8MP `image.json` for whether it lands in the user area or `boot0`.
-
-Then flash via the headless loop in [am62p-hardware-loop.md](./am62p-hardware-loop.md)
-(the loop itself is machine-generic; only the recovery command differs per family).
-
-### 5. On-device milestones (need the board)
-
-M0 flash+serial → M2 `rauc install` A→B → M3 rollback → M4 cloud OTA. **M2–M4 are
-machine-agnostic** — reuse the am62p runbook verbatim (same handler, same REST API
-loop). See [rauc-cloud-test.md](./rauc-cloud-test.md).
+Owning the script does **not** mean reinventing per-machine logic — the machine
+facts come from the stable metadata below, so one generic script serves every
+machine. That is the whole trick.
 
 ---
 
-## What you do NOT need to touch
+## The stable metadata the boot script keys on
 
-- `rauc_actions.sh` (the aktualizr handler) — machine-agnostic.
-- The aktualizr generic-secondary registration/seam — shared.
-- greenboot health authority — shared (`rauc status mark-good`).
-- The cloud provisioning + upload + launch API flow — machine-agnostic.
-- `boot.cmd`'s slot-selection / rollback / partition logic — generalized; a new
-  machine changes only the three `@@…@@` data values via Tier-2/3, never the code.
+All set by the **machine/kernel recipes** (not by any boot script), so they are
+stable and vendor-neutral — every BSP that builds a kernel sets them:
 
-## Reference: the two grounded machines
+| Variable | Meaning | am62p | imx8mp |
+|---|---|---|---|
+| `KERNEL_IMAGETYPE` | kernel image filename | `Image.gz` | `Image.gz` |
+| `KERNEL_DTB_PREFIX` | vendor DTB subdir | `ti/` | `freescale/` |
+| `KERNEL_BOOTCMD` | arch boot command | `booti` | `booti` |
 
-| | Verdin AM62p | Verdin i.MX8MP |
-|---|---|---|
-| SoC family override | `k3` | `mx8mp-generic-bsp` |
-| DTB dir | `/boot/dtb/ti` | `/boot/freescale` |
-| fdtfile | `k3-am62p5-verdin-wifi-yavia.dtb` | `imx8mp-verdin-wifi-dahlia.dtb` |
-| U-Boot env (BSP `fw_env.config`) | `mmcblk0boot0 @ 0x680000` | `/dev/emmc-boot0 @ -0x2200` |
-| Boot firmware | tiboot3/tispl/u-boot → boot0 | `imx-boot` @ 32 KiB |
-| Recovery | dfu-util + recovery-linux.sh | SDP + uuu |
+The **DTB path** varies only in whether the vendor kernel installs under
+`/boot/<prefix>/` (e.g. `/boot/freescale/…`) or `/boot/dtb/<prefix>/` (e.g.
+`/boot/dtb/ti/…`). The base dir (`KERNEL_DTBDEST`) is kernel-recipe-scoped and
+not reliably readable from our recipe, so the script simply **tries both
+layouts** keyed on `KERNEL_DTB_PREFIX` — no per-machine value needed.
+
+Plus these come from the board's own U-Boot at runtime (no build-time value
+needed):
+
+| Runtime U-Boot var | Provides |
+|---|---|
+| `${devnum}` | the mmc device the boot script was loaded from (the eMMC) — replaces any hardcoded "mmc index" |
+| `${fdtfile}` | the device-tree filename, **carrier-auto-detected** by Toradex U-Boot |
+| `${loadaddr}`, `${fdt_addr_r}`, `${ramdisk_addr_r}` | load addresses |
+| `${kernel_comp_addr_r}` | scratch for **`booti` auto-decompression** of `Image.gz` — so we never manage a decompress scratch ourselves |
+
+> These four `KERNEL_*` variables are also exactly what the BSP/Torizon boot
+> scripts substitute — we consume the same stable facts, without depending on
+> their volatile *code*.
+
+---
+
+## What the boot script does (structure)
+
+Built into `boot.scr` by `rauc-uboot-ab`, from a template with `@@KERNEL_*@@`
+substituted at build time. Pseudocode:
+
+```
+# 1. Slot selection (backend-specific preamble) — the only part we "own"
+#    RAUC:     read BOOT_ORDER / BOOT_<slot>_LEFT, pick the first slot with
+#              attempts left, decrement it, saveenv (power-safe), roll back when
+#              a slot's attempts hit 0.
+#    -> sets ${raucslot} (A|B) and ${rootlabel} (rootfs_a|rootfs_b)
+
+# 2. Resolve the slot's partition by GPT label (no hardcoded partition numbers)
+part number mmc ${devnum} ${rootlabel} slotpart
+
+# 3. Boot args
+setenv bootargs "root=PARTLABEL=${rootlabel} rw rauc.slot=${raucslot} ${tdxargs}"
+
+# 4. Kernel load + boot — all from stable metadata / runtime env
+#    DTB: try /boot/<prefix>/ then /boot/dtb/<prefix>/ (keyed on KERNEL_DTB_PREFIX)
+ext4load mmc ${devnum}:${slotpart} ${loadaddr}         /boot/@@KERNEL_IMAGETYPE@@
+ext4load mmc ${devnum}:${slotpart} ${fdt_addr_r}       ${dtbpath}   # resolved above
+ext4load mmc ${devnum}:${slotpart} ${ramdisk_addr_r}   /boot/initramfs
+@@KERNEL_BOOTCMD@@ ${loadaddr} ${ramdisk_addr_r}:${filesize} ${fdt_addr_r}   # booti auto-decompresses
+```
+
+No per-machine constants. `mmc index`, DTB dir, dtb name, decompress scratch,
+arch boot command, kernel format — all resolved from metadata or the board.
+
+Kernel + dtb + initramfs live in **each rootfs slot's `/boot`** (so one payload
+write updates kernel + userspace atomically per slot). The shared FAT boot
+partition carries only `boot.scr`.
+
+---
+
+## Adding a new machine — the porting checklist
+
+For a machine whose **machine conf already sets** `KERNEL_IMAGETYPE`,
+`KERNEL_DTBDEST`, `KERNEL_DTB_PREFIX` (all Toradex machines, and any BSP that
+builds a device-tree kernel), porting is:
+
+1. Add the machine to `rauc-uboot-ab`'s `COMPATIBLE_MACHINE`.
+2. Add the family-scoped wiring **only if the SoC family is new** (mirror `:k3` /
+   `:mx8mp-generic-bsp`): `WKS_FILE` + wic `IMAGE_FSTYPES` in
+   `torizon-ab-rauc.conf`, `RAUC_SYSTEM_BOOTLOADER = "uboot"` in
+   `rauc-conf.bbappend`, and install `rauc-uboot-ab` in `torizon-ab-base.inc`.
+   A machine in an **existing** family (another `k3` / i.MX) needs only step 1.
+3. Add the kernel's squashfs config fragment if that kernel recipe isn't already
+   covered (`recipes-kernel/linux/<kernel>_%.bbappend` → `rauc-squashfs.cfg`).
+4. Build-green + static check (no board):
+   `DISTRO=torizon-ab-rauc MACHINE=<m> bitbake torizon-minimal-ab torizon-ab-bundle`,
+   then verify `boot.scr` has no unsubstituted `@@…@@`, the wic GPT is
+   `boot/rootfs_a/rootfs_b/data`, and `system.conf` is `bootloader=uboot`.
+5. On hardware: M0 flash → M1 boot slot A → M2 `rauc install` A↔B → M3 rollback →
+   M4 cloud OTA (M2–M4 are machine-agnostic — reuse `docs/rauc-cloud-test.md`).
+
+There is normally **no per-machine boot data to write.** If a value is genuinely
+absent (e.g. a board that sets none of the `KERNEL_*` vars), fix it in that
+machine's conf where it belongs — do **not** add a per-machine override here.
+
+### Verifying the assumptions on a new board (first bring-up)
+
+At the U-Boot prompt: `mmc list` (eMMC device), `part list mmc <dev>` (slot
+labels present), `printenv fdtfile kernel_comp_addr_r loadaddr` (carrier dtb +
+auto-decompress available). These confirm the runtime vars the script relies on.
+
+---
+
+## Non-Toradex / third-party hardware
+
+The mechanism is vendor-neutral by construction: it keys on **standard machine
+metadata** (`KERNEL_DTBDEST`/`KERNEL_DTB_PREFIX`/`KERNEL_IMAGETYPE`) that any
+BSP's kernel recipe sets, and on **standard U-Boot runtime vars** (`${devnum}`,
+load addresses, `kernel_comp_addr_r`). So a third-party board is onboarded the
+same way — no per-vendor boot-script adapter and, critically, **no dependency on
+that vendor's boot script.** The only requirements a new BSP must meet:
+
+- its machine conf sets the `KERNEL_*` DTB/image variables (standard),
+- its U-Boot exposes `${devnum}` to a `script` bootmeth (standard distro-boot /
+  bootstd) and sets load addresses (standard),
+- boot medium is a GPT block device (eMMC/SD). Raw-NAND (UBI) boards are out of
+  scope for this ext4-slot model and would need a separate design.
+
+If a board lacks `kernel_comp_addr_r` (older U-Boot), the script falls back to an
+explicit `unzip`; if it also lacks distinct load/decompress addresses, that is
+the one case needing a small, board-scoped scratch — add it to that board's
+conf, not as a shared default.
+
+---
+
+## Backends
+
+`rauc-uboot-ab` (RAUC) and the SWUpdate `uboot-ab` glue share the **same generic
+kernel-load body**; only the slot-selection preamble differs:
+
+- **RAUC:** `BOOT_ORDER` + `BOOT_<slot>_LEFT` (RAUC's uboot bootloader backend
+  reads/writes these via `fw_setenv`).
+- **SWUpdate:** `rootfs_slot` + `bootcount`/`bootlimit` + `upgrade_available`.
+
+Selected by the distro override (`:torizon-ab-rauc` / `:torizon-ab-swupdate`).
+Adding the generic body to the SWUpdate path makes both backends portable
+identically.
+
+---
+
+## What not to do
+
+- **Do not** add per-machine boot constants (mmc index, DTB dir, dtb name, load
+  addresses, decompress scratch) to this layer. They all come from metadata or
+  the board. If you're tempted, the fact belongs in the machine conf.
+- **Do not** `require`/bbappend the BSP-common `u-boot-distro-boot` boot script,
+  or vendor a copy of it. We own a generic script keyed on stable metadata so we
+  are insulated from that team's changes (as Torizon OS itself is).
+- **Do not** reintroduce a `torizon-ab-uboot.inc` per-machine data block — the
+  point of this architecture is that it isn't needed.

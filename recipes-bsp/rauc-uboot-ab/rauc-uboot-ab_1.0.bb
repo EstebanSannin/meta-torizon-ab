@@ -1,21 +1,22 @@
 SUMMARY = "RAUC U-Boot A/B bootstrap + boot script + greenboot health (generalized)"
 DESCRIPTION = "The U-Boot counterpart of rauc-grub-ab, generalized across U-Boot \
-RAUC machines (TI K3, NXP i.MX). Provides: the A/B boot script (boot.scr) that \
-selects the rootfs slot from RAUC's U-Boot-env variables (BOOT_ORDER + \
-BOOT_<slot>_LEFT), resolves the slot partition by GPT label at runtime, and rolls \
-back when a slot's attempts run out; a first-boot bootstrap that seeds those \
-variables via fw_setenv if absent; and a greenboot green.d hook that confirms a \
-healthy boot to RAUC (rauc status mark-good). RAUC's 'uboot' bootloader backend \
-reads/writes the same variables. The only machine data (DTB dir, device-tree \
-file, mmc index, decompress scratch) comes from torizon-ab-uboot.inc and is \
-substituted into boot.cmd at build time."
+RAUC machines. Provides: the A/B boot script (boot.scr) that selects the rootfs \
+slot from RAUC's U-Boot-env variables (BOOT_ORDER + BOOT_<slot>_LEFT), resolves \
+the slot partition by GPT label at runtime, and rolls back when a slot's attempts \
+run out; a first-boot bootstrap that seeds those variables via fw_setenv if \
+absent; and a greenboot green.d hook that confirms a healthy boot to RAUC (rauc \
+status mark-good). The boot script owns ONLY slot selection and delegates the \
+kernel load to stable machine/kernel metadata (KERNEL_IMAGETYPE / KERNEL_DTB_PREFIX \
+/ KERNEL_BOOTCMD) plus the board's own U-Boot env (mmc device, carrier fdtfile, \
+load addresses, booti auto-decompression) -- so there is NO per-machine boot data. \
+See docs/uboot-rauc-porting.md."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 
 inherit systemd deploy
 
-# U-Boot RAUC machines. Add a new machine here once it has a per-machine data
-# block in conf/distro/include/torizon-ab-uboot.inc (see docs/uboot-rauc-porting.md).
+# U-Boot RAUC machines. Adding a new one is usually just this line (the boot
+# script needs no per-machine data); see docs/uboot-rauc-porting.md.
 COMPATIBLE_MACHINE = "verdin-am62p|verdin-imx8mp"
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 
@@ -38,18 +39,23 @@ SRC_URI = " \
     file://00_rauc_mark_good.sh \
 "
 
-# Machine data substituted into boot.cmd (see conf/distro/include/torizon-ab-uboot.inc).
+# Arch-appropriate kernel boot command (mirrors u-boot-distro-boot).
+KERNEL_BOOTCMD ??= "bootz"
+KERNEL_BOOTCMD:aarch64 = "booti"
+
+# boot.cmd is templated on STABLE machine/kernel metadata only -- no per-machine
+# boot data. KERNEL_IMAGETYPE + KERNEL_DTB_PREFIX come from the machine/kernel
+# recipe; the rest is resolved at runtime from the board's U-Boot env.
 do_compile() {
-    if [ -z "${TORIZON_AB_DTB_DIR}" ] || [ -z "${TORIZON_AB_FDTFILE}" ]; then
-        bbfatal "rauc-uboot-ab: TORIZON_AB_DTB_DIR / TORIZON_AB_FDTFILE unset for ${MACHINE}. Add its SoC-family + per-machine block to conf/distro/include/torizon-ab-uboot.inc (see docs/uboot-rauc-porting.md)."
+    if [ -z "${KERNEL_IMAGETYPE}" ] || [ -z "${KERNEL_DTB_PREFIX}" ]; then
+        bbfatal "rauc-uboot-ab: KERNEL_IMAGETYPE / KERNEL_DTB_PREFIX unset for ${MACHINE}; these come from the machine/kernel metadata (see docs/uboot-rauc-porting.md)."
     fi
-    sed -e 's|@@MMCDEV@@|${TORIZON_AB_MMCDEV}|g' \
-        -e 's|@@DTB_DIR@@|${TORIZON_AB_DTB_DIR}|g' \
-        -e 's|@@FDTFILE@@|${TORIZON_AB_FDTFILE}|g' \
-        -e 's|@@KERNEL_SCRATCH@@|${TORIZON_AB_KERNEL_SCRATCH}|g' \
+    sed -e 's|@@KERNEL_IMAGETYPE@@|${KERNEL_IMAGETYPE}|g' \
+        -e 's|@@KERNEL_DTB_PREFIX@@|${KERNEL_DTB_PREFIX}|g' \
+        -e 's|@@KERNEL_BOOTCMD@@|${KERNEL_BOOTCMD}|g' \
         ${WORKDIR}/boot.cmd > ${WORKDIR}/boot.cmd.resolved
 
-    # arm64 for both current families; parameterize if a 32-bit U-Boot target appears.
+    # arm64 for the current aarch64 targets; parameterize if a 32-bit target appears.
     uboot-mkimage -A arm64 -O linux -T script -C none \
         -n "Torizon A/B RAUC boot" -d ${WORKDIR}/boot.cmd.resolved ${WORKDIR}/boot.scr
 }
