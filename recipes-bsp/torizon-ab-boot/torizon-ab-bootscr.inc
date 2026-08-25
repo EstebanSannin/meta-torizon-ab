@@ -26,6 +26,10 @@ BOOT_PREAMBLE ??= ""
 TORIZON_AB_FDTFILE ??= "${UBOOT_DTB_NAME}"
 # Verdin iMX8MP dev boards here are on the Dahlia carrier.
 TORIZON_AB_FDTFILE:verdin-imx8mp = "imx8mp-verdin-wifi-dahlia.dtb"
+# Verdin AM62P WB here is on the Yavia carrier. (UBOOT_DTB_NAME is empty on am62p,
+# and stock U-Boot carrier auto-detect returns -dev; the stock am62p boot.scr
+# likewise hardcodes this. Set to your carrier when deploying elsewhere.)
+TORIZON_AB_FDTFILE:verdin-am62p = "k3-am62p5-verdin-wifi-yavia.dtb"
 
 # Assemble [preamble]+[body], substitute the stable metadata, compile to boot.scr.
 # No per-machine boot data: KERNEL_IMAGETYPE + KERNEL_DTB_PREFIX come from the
