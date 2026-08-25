@@ -174,6 +174,34 @@ RAUC-specific (`:torizon-ab-rauc`): `rauc` + `rauc-conf` (system.conf + keyring)
     so the QEMU race window is lost. This makes the observed-state hardening a
     **robustness/defence-in-depth** item (fast-rebooting targets, power-cut) rather
     than a functional blocker on this class of hardware.
+  - **Verified implementation spec (Phase 0, 2026-08-25) — banked, not yet built.**
+    Contract confirmed from `toradex/aktualizr` (branch `toradex-master`, SRCREV
+    `b16069ce`), `src/torizon/generic_secondary/torizongenericsecondary.cc`
+    (`TorizonGenericSecondary::getFirmwareInfo` + `callActionHandler`):
+    - aktualizr runs `<handler> get-firmware-info` with cwd
+      `/var/sota/storage/rootfs`, `SECONDARY_*` in env, and **parses the handler's
+      stdout as JSON**.
+    - Exit code: `0` → parse JSON; **`64` → fall back to the base class**
+      (aktualizr's own stored state — this is today's `exit 64` behavior); `65` →
+      info unavailable.
+    - Exit-0 JSON keys: **`status` required** (must be `"ok"` or the info is
+      rejected); **`sha256`+`length` together** (both or neither) = the installed
+      image's hash + byte length — omit both and aktualizr hashes the stored
+      `rootfs.raucb` itself; `name` optional; `message` optional (logged).
+    - No Toradex reference handler emits this today (`bl_actions.sh`,
+      `swupdate_actions.sh`, and `rauc_actions.sh` all `exit 64`).
+
+    Plan when built: (1) in `do_install`, after `rauc install` succeeds, record
+    `{sha256:$SECONDARY_FIRMWARE_SHA256, length, name}` for the **target slot**
+    (e.g. `/var/lib/rollback-manager/installed-slot-<A|B>.json`) — the slot's
+    unpacked ext4 can't be re-hashed to the bundle hash, so it must be recorded;
+    (2) in `do_get_firmware_info`, resolve the booted slot and, **only if a valid
+    record exists**, emit `{"status":"ok","name":…,"sha256":…,"length":…}` exit 0,
+    else `exit 64` (unchanged) — guarded so it is happy-path-equivalent to today and
+    diverges only in the kPending-lost race (base = stale, ours = correct); (3)
+    validate on HW: a normal cloud update still reports `Completed` (regression) plus
+    a deliberate kPending-loss fault injection to prove the race path now reports
+    correctly.
 - **Startup SSL-58 posting update *events* (new, minor).** Right after a
   post-update boot, aktualizr emits a one-shot burst of
   `curl error 58 … Problem with the local SSL certificate` while posting update
