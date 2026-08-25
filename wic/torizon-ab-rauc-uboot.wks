@@ -1,21 +1,26 @@
-# short-description: Torizon OS A/B (RAUC) — Verdin AM62p (TI K3 / U-Boot)
+# short-description: Torizon OS A/B (RAUC) — shared U-Boot / eMMC layout
 # long-description:
-#   A/B dual-rootfs eMMC/SD layout for the RAUC backend on the Verdin AM62p.
+#   A/B dual-rootfs eMMC layout for the RAUC backend on U-Boot machines (TI K3
+#   and NXP i.MX families). One layout serves every U-Boot RAUC target because
+#   they all boot from on-module eMMC (mmcblk0) and RAUC addresses the slots by
+#   GPT PARTLABEL:
 #     p1 /boot vfat  label=boot  part-name=boot     - FAT boot: our A/B boot.scr
 #                                                      (the slot SELECTOR that
-#                                                      U-Boot's bootflow/script
-#                                                      bootmeth runs)
+#                                                      U-Boot's script bootmeth
+#                                                      runs; see rauc-uboot-ab)
 #     p2 /     ext4  part-name=rootfs_a             - rootfs slot A (factory)
 #     p3       ext4  part-name=rootfs_b             - rootfs slot B (empty)
 #     p4 /var  ext4  part-name=data label=data      - shared persistent data
 #
 #   RAUC addresses the slots by GPT PARTLABEL (rootfs_a/rootfs_b), which survives
-#   a raw ext4 write. Kernel (Image.gz) + DTB + initramfs live in EACH rootfs
+#   a raw ext4 write; boot.scr resolves the slot's partition number from that
+#   label at runtime. Kernel (Image.gz) + DTB + initramfs live in EACH rootfs
 #   slot's /boot and are ext4load'd by boot.scr from the selected slot.
 #
-#   The TI boot firmware (tiboot3/tispl/u-boot) is NOT in this image — on AM62p
-#   it lives in the eMMC boot0 HW partition, written separately by the Tezi
-#   image.json wrapper used to flash this .wic.
+#   The SoC boot firmware is NOT in this .wic: on TI K3 it lives in the eMMC
+#   boot0 HW partition (tiboot3/tispl/u-boot), on i.MX it is the single imx-boot
+#   blob at an eMMC offset. Both are written separately by the per-family Tezi
+#   image.json wrapper used to flash this .wic (see docs/uboot-rauc-porting.md).
 #
 #   boot.scr comes from rauc-uboot-ab (deployed to DEPLOY_DIR_IMAGE); it is
 #   staged into the FAT partition via IMAGE_BOOT_FILES = "boot.scr".

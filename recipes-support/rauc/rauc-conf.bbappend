@@ -11,12 +11,14 @@ RAUC_KEYRING_FILE:torizon-ab-rauc = "keyring.pem"
 
 RAUC_COMPATIBLE ??= "torizon-ab-rauc-${MACHINE}"
 
-# RAUC bootloader backend per machine:
-#   x86         -> grub  (RAUC reads/writes ORDER/*_OK/*_TRY in the grubenv)
-#   verdin-am62p-> uboot (RAUC reads/writes BOOT_ORDER/BOOT_<slot>_LEFT in the
-#                         U-Boot env via fw_setenv; see recipes-bsp/rauc-uboot-ab)
-RAUC_SYSTEM_BOOTLOADER            ?= "grub"
-RAUC_SYSTEM_BOOTLOADER:verdin-am62p = "uboot"
+# RAUC bootloader backend per SoC family:
+#   x86            -> grub  (RAUC reads/writes ORDER/*_OK/*_TRY in the grubenv)
+#   TI K3 / NXP i.MX -> uboot (RAUC reads/writes BOOT_ORDER/BOOT_<slot>_LEFT in
+#                         the U-Boot env via fw_setenv; see recipes-bsp/rauc-uboot-ab)
+# Family-scoped so a new K3 / i.MX machine inherits the uboot backend.
+RAUC_SYSTEM_BOOTLOADER                   ?= "grub"
+RAUC_SYSTEM_BOOTLOADER:k3                = "uboot"
+RAUC_SYSTEM_BOOTLOADER:mx8mp-generic-bsp = "uboot"
 
 # The base recipe installs the example system.conf; overwrite it with ours.
 # The [system] bootloader line differs by backend; the grubenv path is emitted

@@ -12,6 +12,10 @@
 
 require conf/distro/include/common-torizon.inc
 
+# Per-family / per-machine data for the U-Boot A/B glue (the porting-contract
+# surface). Harmless on non-U-Boot machines (nothing consumes it there).
+require conf/distro/include/torizon-ab-uboot.inc
+
 # Distro-specific override so recipes can use ':torizon-ab' for content shared
 # by both backends. The backend-specific token (':torizon-ab-swupdate' /
 # ':torizon-ab-rauc') is appended by the including distro conf.
@@ -47,8 +51,10 @@ IMAGE_FSTYPES = "ext4 ext4.gz"
 IMAGE_FSTYPES:append:genericx86-64   = " wic wic.bmap"
 IMAGE_FSTYPES:append:intel-corei7-64 = " wic wic.bmap"
 
-# verdin-imx8mp (U-Boot/eMMC): a rootfs tarball for Phase-1 bring-up.
-IMAGE_FSTYPES:append:verdin-imx8mp = " tar.bz2"
+# verdin-imx8mp SWUpdate draft (U-Boot/eMMC): a rootfs tarball for Phase-1
+# bring-up. Scoped to the SWUpdate backend; the RAUC backend builds a flashable
+# wic instead (see torizon-ab-rauc.conf).
+IMAGE_FSTYPES:append:torizon-ab-swupdate:verdin-imx8mp = " tar.bz2"
 
 # Stable identifiers for the A/B slots, data and boot partitions. SWUpdate
 # addresses slots by the ext4 FS label (ROOTLABEL_*); RAUC by GPT partition

@@ -1,19 +1,22 @@
-SUMMARY = "RAUC U-Boot A/B bootstrap + boot script + greenboot health (Verdin AM62p)"
-DESCRIPTION = "The U-Boot counterpart of rauc-grub-ab. Provides: the A/B boot \
-script (boot.scr) that selects the rootfs slot from RAUC's U-Boot-env variables \
-(BOOT_ORDER + BOOT_<slot>_LEFT) and rolls back when a slot's attempts run out; a \
-first-boot bootstrap that seeds those variables via fw_setenv if absent; the \
-fw_env.config that points libubootenv at the real U-Boot environment; and a \
-greenboot green.d hook that confirms a healthy boot to RAUC (rauc status \
-mark-good). RAUC's 'uboot' bootloader backend reads/writes the same variables. \
-DRAFT: the boot.scr load flow needs bring-up iteration on real hardware."
+SUMMARY = "RAUC U-Boot A/B bootstrap + boot script + greenboot health (generalized)"
+DESCRIPTION = "The U-Boot counterpart of rauc-grub-ab, generalized across U-Boot \
+RAUC machines (TI K3, NXP i.MX). Provides: the A/B boot script (boot.scr) that \
+selects the rootfs slot from RAUC's U-Boot-env variables (BOOT_ORDER + \
+BOOT_<slot>_LEFT), resolves the slot partition by GPT label at runtime, and rolls \
+back when a slot's attempts run out; a first-boot bootstrap that seeds those \
+variables via fw_setenv if absent; and a greenboot green.d hook that confirms a \
+healthy boot to RAUC (rauc status mark-good). RAUC's 'uboot' bootloader backend \
+reads/writes the same variables. The only machine data (DTB dir, device-tree \
+file, mmc index, decompress scratch) comes from torizon-ab-uboot.inc and is \
+substituted into boot.cmd at build time."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 
 inherit systemd deploy
 
-# TI (Verdin AM62p) / U-Boot only.
-COMPATIBLE_MACHINE = "verdin-am62p"
+# U-Boot RAUC machines. Add a new machine here once it has a per-machine data
+# block in conf/distro/include/torizon-ab-uboot.inc (see docs/uboot-rauc-porting.md).
+COMPATIBLE_MACHINE = "verdin-am62p|verdin-imx8mp"
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 
 # mkimage (build host) to compile boot.cmd -> boot.scr.
@@ -24,8 +27,10 @@ RDEPENDS:${PN} = "libubootenv-bin rauc greenboot bash"
 SYSTEMD_SERVICE:${PN} = "rauc-ubootenv-create.service"
 
 # NOTE: /etc/fw_env.config is provided by the BSP's libubootenv0 (pulled in via
-# libubootenv-bin) and already points at the AM62p U-Boot env (mmcblk0boot0);
-# we deliberately do NOT ship our own to avoid a file conflict.
+# libubootenv-bin) and already points at the machine's real U-Boot env (am62p:
+# mmcblk0boot0@0x680000; imx8mp: /dev/emmc-boot0@-0x2200). We deliberately do NOT
+# ship our own to avoid a file conflict — the env location is BSP-owned data, not
+# something this layer hardcodes. RAUC's uboot backend and fw_setenv share it.
 SRC_URI = " \
     file://boot.cmd \
     file://rauc-ubootenv-create.sh \
@@ -33,9 +38,20 @@ SRC_URI = " \
     file://00_rauc_mark_good.sh \
 "
 
+# Machine data substituted into boot.cmd (see conf/distro/include/torizon-ab-uboot.inc).
 do_compile() {
+    if [ -z "${TORIZON_AB_DTB_DIR}" ] || [ -z "${TORIZON_AB_FDTFILE}" ]; then
+        bbfatal "rauc-uboot-ab: TORIZON_AB_DTB_DIR / TORIZON_AB_FDTFILE unset for ${MACHINE}. Add its SoC-family + per-machine block to conf/distro/include/torizon-ab-uboot.inc (see docs/uboot-rauc-porting.md)."
+    fi
+    sed -e 's|@@MMCDEV@@|${TORIZON_AB_MMCDEV}|g' \
+        -e 's|@@DTB_DIR@@|${TORIZON_AB_DTB_DIR}|g' \
+        -e 's|@@FDTFILE@@|${TORIZON_AB_FDTFILE}|g' \
+        -e 's|@@KERNEL_SCRATCH@@|${TORIZON_AB_KERNEL_SCRATCH}|g' \
+        ${WORKDIR}/boot.cmd > ${WORKDIR}/boot.cmd.resolved
+
+    # arm64 for both current families; parameterize if a 32-bit U-Boot target appears.
     uboot-mkimage -A arm64 -O linux -T script -C none \
-        -n "Torizon A/B RAUC boot" -d ${WORKDIR}/boot.cmd ${WORKDIR}/boot.scr
+        -n "Torizon A/B RAUC boot" -d ${WORKDIR}/boot.cmd.resolved ${WORKDIR}/boot.scr
 }
 
 do_install() {

@@ -122,16 +122,26 @@ CORE_IMAGE_BASE_INSTALL:append:torizon-ab-swupdate:verdin-imx8mp   = " uboot-ab"
 # RAUC backend: RAUC's native grub bootloader backend + its grubenv bootstrap.
 CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc:genericx86-64       = " rauc-grub-ab"
 CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc:intel-corei7-64     = " rauc-grub-ab"
-# RAUC backend on TI (Verdin AM62p): RAUC's native u-boot backend + BOOT_ORDER
-# bootstrap + the A/B boot.scr (see recipes-bsp/rauc-uboot-ab).
-CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc:verdin-am62p        = " rauc-uboot-ab"
+# RAUC backend on U-Boot families (TI K3, NXP i.MX): RAUC's native u-boot
+# backend + BOOT_ORDER bootstrap + the A/B boot.scr (see recipes-bsp/rauc-uboot-ab).
+# Family-scoped so a new K3 / i.MX machine inherits the glue.
+CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc:k3                = " rauc-uboot-ab"
+CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc:mx8mp-generic-bsp = " rauc-uboot-ab"
 
-# AM62p: the FAT boot partition carries only our A/B boot.scr (the slot selector
-# that U-Boot's bootflow/script bootmeth runs); kernel/DTB/initramfs live per
+# U-Boot RAUC families: the FAT boot partition carries only our A/B boot.scr (the
+# slot selector U-Boot's script bootmeth runs); kernel/DTB/initramfs live per
 # slot in the rootfs /boot. Override the machine's stock multi-file
 # IMAGE_BOOT_FILES, and make the .wic wait for rauc-uboot-ab to deploy boot.scr.
-IMAGE_BOOT_FILES:verdin-am62p = "boot.scr"
+IMAGE_BOOT_FILES:torizon-ab-rauc:k3                = "boot.scr"
+IMAGE_BOOT_FILES:torizon-ab-rauc:mx8mp-generic-bsp = "boot.scr"
+# Some machine confs (e.g. verdin-imx8mp) do IMAGE_BOOT_FILES:append with the
+# stock distro boot script ("boot.scr-${MACHINE};boot.scr"), which is staged
+# into the FAT boot partition AFTER — and thus OVERWRITES — our A/B slot-selector
+# boot.scr. :remove applies after :append, so drop the stock entry and keep only
+# ours. No-op on machines without that token (am62p/x86).
+IMAGE_BOOT_FILES:remove = "boot.scr-${MACHINE};boot.scr"
 do_image_wic[depends] += "${@bb.utils.contains('MACHINE', 'verdin-am62p', 'rauc-uboot-ab:do_deploy', '', d)}"
+do_image_wic[depends] += "${@bb.utils.contains('MACHINE', 'verdin-imx8mp', 'rauc-uboot-ab:do_deploy', '', d)}"
 
 # The rootfs subsystem secondary + swupdate_actions.sh handler are added to the
 # shared aktualizr secondaries via a bbappend to aktualizr-default-sec (pulled
