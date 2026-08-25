@@ -183,6 +183,38 @@ the new slot → greenboot `mark-good` → cloud `status = Completed`, device
 either. This confirms M2/M3/M4 are genuinely machine-agnostic: the handler, the
 aktualizr seam, and the cloud path are identical across TI K3 and NXP i.MX.
 
+## Also verified — SWUpdate backend on real hardware — Verdin iMX8MP (2026-08-26)
+
+The **same aktualizr generic-secondary cloud path** was driven end-to-end for the
+**SWUpdate** backend (distro `torizon-ab`) against the physical Verdin iMX8MP, via
+the identical Torizon Cloud REST API flow — only the handler and payload differ
+(`swupdate_actions.sh` → `swupdate -i … -e stable,slot_<a|b>`; payload the full
+rootfs `.swu`). This closes M4 for SWUpdate (M1–M3 — first HW boot, local `swupdate`
+install A→B proven by FS-UUID, and rollback both deterministic and organic — were
+validated the same day).
+
+Method, unchanged from RAUC:
+- **Provision** (`POST /devices` with the provision client → per-device zip;
+  `client.pem`+`pkey.pem` into `/var/sota/import/`; `systemctl start
+  aktualizr-torizon`) → `Provisioned on server: yes`, secondary hwid
+  **`verdin-imx8mp-rootfs`** registered.
+- **Upload:** `POST /packages?name=torizon-ab-swu-verdin-imx8mp&version=<v>&hardwareId=verdin-imx8mp-rootfs&targetFormat=BINARY`
+  with the `.swu` as `--data-binary` (same `BINARY` format as the `.raucb`).
+- **Launch:** `POST /updates {"packageIds":[…],"devices":[<uuid>]}`; force a check
+  with `systemctl restart aktualizr-torizon`.
+
+**Result:** download 100% → `No update to install on Primary` (primary inert) →
+the `verdin-imx8mp-rootfs` secondary ran SWUpdate, raw-writing the ext4 to the
+inactive slot → `bootenv_arm_trial` armed U-Boot (`rootfs_slot`) →
+`torizon-ab-pending-reboot` rebooted → boot script: `A/B: booting slot partition
+rootfs_b` / `root=LABEL=otaroot_b` → greenboot healthy. On the next boot aktualizr
+reconciled: *"current update is pending → Trying to complete pending update Hash …
+on Secondary rootfs → has been installed → No pending update for Primary"* → cloud
+**Completed / UpToDate**, **rollback slot A retained**. The **reboot race did not
+reproduce** here either (same slow-reboot reasoning as RAUC). This confirms the
+aktualizr seam and the cloud path are backend-agnostic: RAUC and SWUpdate take the
+identical provision/upload/launch/report flow, differing only below the handler.
+
 ## Notes / gotchas
 
 - The bundle is **plain**-format and **dev-signed** (`/etc/rauc/keyring.pem` is a

@@ -1,0 +1,23 @@
+# short-description: Torizon OS A/B (SWUpdate) — shared U-Boot / eMMC layout
+# long-description:
+#   A/B dual-rootfs eMMC layout for the SWUpdate backend on U-Boot machines.
+#   Identical partition skeleton to the RAUC one (wic/torizon-ab-rauc-uboot.wks);
+#   the ONLY difference is the rootfs slots carry an ext4 FS label
+#   (otaroot_a/otaroot_b) in addition to the GPT part-name:
+#     p1 /boot vfat  label=boot  part-name=boot                 - FAT boot: boot.scr
+#     p2 /     ext4  label=otaroot_a  part-name=rootfs_a        - rootfs slot A
+#     p3       ext4  label=otaroot_b  part-name=rootfs_b        - rootfs slot B
+#     p4 /var  ext4  label=data       part-name=data           - shared data
+#
+#   The boot script resolves the slot PARTITION by GPT part-name (rootfs_a/b,
+#   shared with RAUC), while the kernel roots on the ext4 LABEL
+#   (root=LABEL=otaroot_<slot>, resolved by the initramfs). SWUpdate's handler
+#   restores the ext4 label after each raw slot write (a raw write clobbers it;
+#   the GPT part-name survives).
+
+part /boot --source bootimg-partition --ondisk mmcblk0 --fstype=vfat --label boot --part-name boot --active --align 1024 --fixed-size 128 --no-fstab-update
+part /     --source rootfs --ondisk mmcblk0 --fstype=ext4 --label otaroot_a --part-name rootfs_a --align 1024 --fixed-size 1536 --no-fstab-update
+part       --ondisk mmcblk0 --fstype=ext4 --label otaroot_b --part-name rootfs_b --align 1024 --fixed-size 1536 --no-fstab-update
+part /var  --ondisk mmcblk0 --fstype=ext4 --label data --part-name data --align 1024 --fixed-size 1024 --no-fstab-update
+
+bootloader --ptable gpt

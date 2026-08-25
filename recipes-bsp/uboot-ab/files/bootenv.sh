@@ -21,6 +21,13 @@ bootenv_arm_trial() {
     maybe_run FW_SETENV rootfs_slot "$slot"
     maybe_run FW_SETENV upgrade_available 1
     maybe_run FW_SETENV bootcount 0
+    # Clear any stale rollback flag from a PREVIOUS failed trial. The stock boot
+    # script (like Torizon's) leaves rollback=1 set after a rollback and relies on
+    # the updater to reset it when arming the next trial -- otherwise the stale
+    # flag would make this fresh trial roll back on its very first boot. In stock
+    # Torizon aktualizr's bootloader class does this; here the generic-secondary
+    # handler owns the boot env, so we do it.
+    maybe_run FW_SETENV rollback 0
     maybe_run FW_SETENV ab_target "$1"
 }
 

@@ -47,10 +47,9 @@ IMAGE_FSTYPES = "ext4 ext4.gz"
 IMAGE_FSTYPES:append:genericx86-64   = " wic wic.bmap"
 IMAGE_FSTYPES:append:intel-corei7-64 = " wic wic.bmap"
 
-# verdin-imx8mp SWUpdate draft (U-Boot/eMMC): a rootfs tarball for Phase-1
-# bring-up. Scoped to the SWUpdate backend; the RAUC backend builds a flashable
-# wic instead (see torizon-ab-rauc.conf).
-IMAGE_FSTYPES:append:torizon-ab-swupdate:verdin-imx8mp = " tar.bz2"
+# (SWUpdate on U-Boot / i.MX now builds a flashable wic, like RAUC -- see the
+# WKS_FILE / IMAGE_FSTYPES in torizon-ab.conf. The old Phase-1 tar.bz2 output is
+# no longer needed.)
 
 # Stable identifiers for the A/B slots, data and boot partitions. SWUpdate
 # addresses slots by the ext4 FS label (ROOTLABEL_*); RAUC by GPT partition

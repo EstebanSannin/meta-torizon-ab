@@ -68,13 +68,37 @@ needed):
 | Runtime U-Boot var | Provides |
 |---|---|
 | `${devnum}` | the mmc device the boot script was loaded from (the eMMC) — replaces any hardcoded "mmc index" |
-| `${fdtfile}` | the device-tree filename, **carrier-auto-detected** by Toradex U-Boot |
 | `${loadaddr}`, `${fdt_addr_r}`, `${ramdisk_addr_r}` | load addresses |
 | `${kernel_comp_addr_r}` | scratch for **`booti` auto-decompression** of `Image.gz` — so we never manage a decompress scratch ourselves |
 
-> These four `KERNEL_*` variables are also exactly what the BSP/Torizon boot
+> These `KERNEL_*` variables are also exactly what the BSP/Torizon boot
 > scripts substitute — we consume the same stable facts, without depending on
 > their volatile *code*.
+
+### The one genuine per-deployment value: the carrier device tree
+
+The device-tree *filename* is the **only** value that is not derivable from
+stable metadata or the running U-Boot, because it depends on the **carrier board**
+the SoM is plugged into (Dahlia, Yavia, Mallow, …) — a deployment fact, not a
+machine fact.
+
+U-Boot's carrier **auto-detection** (`${fdtfile}`) is **not reliable** for this:
+on the Verdin iMX8MP it left `${fdtfile}` pointing at the `-dev` (Verdin
+Development Board) DTB, which boots but misconfigures peripherals — observed as
+**no ethernet** (the wrong carrier's pinmux). So the boot body does **not** trust
+it. Instead the carrier DTB is baked in at build time via **`TORIZON_AB_FDTFILE`**
+(→ the `@@FDTFILE@@` placeholder), defaulting to the machine's `UBOOT_DTB_NAME`
+and overridable per machine/deployment — e.g. in `torizon-ab-bootscr.inc`:
+
+```
+TORIZON_AB_FDTFILE ??= "${UBOOT_DTB_NAME}"
+TORIZON_AB_FDTFILE:verdin-imx8mp = "imx8mp-verdin-wifi-dahlia.dtb"   # our carrier
+```
+
+A runtime override (`${ab_fdtfile}` in the U-Boot env) takes precedence over the
+baked value, so a field unit on a different carrier can be corrected without a
+rebuild. **When porting, set `TORIZON_AB_FDTFILE` to the carrier you actually
+deploy on** — it is the single thing you must get right per deployment.
 
 ---
 
@@ -120,23 +144,28 @@ For a machine whose **machine conf already sets** `KERNEL_IMAGETYPE`,
 builds a device-tree kernel), porting is:
 
 1. Add the machine to `rauc-uboot-ab`'s `COMPATIBLE_MACHINE`.
-2. Add the family-scoped wiring **only if the SoC family is new** (mirror `:k3` /
+2. Set **`TORIZON_AB_FDTFILE`** for the machine to the **carrier DTB you deploy
+   on** (in `torizon-ab-bootscr.inc`) — the one genuine per-deployment value (see
+   [the carrier device tree](#the-one-genuine-per-deployment-value-the-carrier-device-tree)).
+   It defaults to `${UBOOT_DTB_NAME}`; override it if that isn't your carrier.
+3. Add the family-scoped wiring **only if the SoC family is new** (mirror `:k3` /
    `:mx8mp-generic-bsp`): `WKS_FILE` + wic `IMAGE_FSTYPES` in
    `torizon-ab-rauc.conf`, `RAUC_SYSTEM_BOOTLOADER = "uboot"` in
    `rauc-conf.bbappend`, and install `rauc-uboot-ab` in `torizon-ab-base.inc`.
-   A machine in an **existing** family (another `k3` / i.MX) needs only step 1.
-3. Add the kernel's squashfs config fragment if that kernel recipe isn't already
+   A machine in an **existing** family (another `k3` / i.MX) needs only steps 1–2.
+4. Add the kernel's squashfs config fragment if that kernel recipe isn't already
    covered (`recipes-kernel/linux/<kernel>_%.bbappend` → `rauc-squashfs.cfg`).
-4. Build-green + static check (no board):
+5. Build-green + static check (no board):
    `DISTRO=torizon-ab-rauc MACHINE=<m> bitbake torizon-minimal-ab torizon-ab-bundle`,
    then verify `boot.scr` has no unsubstituted `@@…@@`, the wic GPT is
    `boot/rootfs_a/rootfs_b/data`, and `system.conf` is `bootloader=uboot`.
-5. On hardware: M0 flash → M1 boot slot A → M2 `rauc install` A↔B → M3 rollback →
+6. On hardware: M0 flash → M1 boot slot A → M2 `rauc install` A↔B → M3 rollback →
    M4 cloud OTA (M2–M4 are machine-agnostic — reuse `docs/rauc-cloud-test.md`).
 
-There is normally **no per-machine boot data to write.** If a value is genuinely
-absent (e.g. a board that sets none of the `KERNEL_*` vars), fix it in that
-machine's conf where it belongs — do **not** add a per-machine override here.
+Apart from `TORIZON_AB_FDTFILE` (the carrier, step 2), there is **no per-machine
+boot data to write.** If a *kernel* fact is genuinely absent (e.g. a board that
+sets none of the `KERNEL_*` vars), fix it in that machine's conf where it belongs
+— do **not** add a per-machine override here.
 
 ### Verifying the assumptions on a new board (first bring-up)
 

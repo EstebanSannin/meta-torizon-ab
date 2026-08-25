@@ -1,39 +1,39 @@
-SUMMARY = "U-Boot A/B boot script + boot-env glue for Torizon OS A/B (imx8mp)"
-DESCRIPTION = "The U-Boot counterpart of grub-ab: a boot.scr that selects the \
-rootfs slot (a/b) and rolls back via the stock bootcount/bootlimit mechanism, \
-plus the bootenv.sh helper the rootfs action handler sources (real U-Boot env \
-via fw_setenv) and a greenboot green.d hook to reset the boot counter. \
-DRAFT — the boot script needs bring-up iteration on real hardware."
+SUMMARY = "U-Boot A/B boot script + boot-env glue for Torizon OS A/B (SWUpdate)"
+DESCRIPTION = "The U-Boot counterpart of grub-ab for the SWUpdate backend. \
+Provides the A/B boot script (SWUpdate bootcount/rootfs_slot slot-selection \
+preamble + the shared metadata-driven kernel-load body, see \
+recipes-bsp/torizon-ab-boot), the bootenv.sh helper the rootfs action handler \
+sources (arm/confirm trials via the real U-Boot env), and a greenboot green.d \
+hook to reset the boot counter. Rolls back via the stock U-Boot \
+bootcount/bootlimit mechanism. No per-machine boot data (the body delegates to \
+KERNEL_* metadata + the board's U-Boot env); see docs/uboot-rauc-porting.md."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
+
+# Shared boot-script assembly (do_compile: [preamble]+[body] -> boot.scr; do_deploy).
+require recipes-bsp/torizon-ab-boot/torizon-ab-bootscr.inc
+BOOT_PREAMBLE = "boot-select-swupdate.cmd"
 
 inherit systemd
 
 COMPATIBLE_MACHINE = "verdin-imx8mp"
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 
-# mkimage (build host) to compile boot.cmd -> boot.scr.
-DEPENDS = "u-boot-tools-native"
 # fw_setenv/fw_printenv (real U-Boot env) at runtime; greenboot hooks.
-RDEPENDS:${PN} = "u-boot-fw-utils greenboot"
+RDEPENDS:${PN} = "libubootenv-bin greenboot"
 
 # The action handler (aktualizr-default-sec) sources /usr/lib/torizon-ab/bootenv.sh.
 RPROVIDES:${PN} += "torizon-ab-bootenv"
 
-SRC_URI = " \
-    file://boot.cmd \
+SRC_URI += " \
+    file://boot-select-swupdate.cmd \
     file://bootenv.sh \
     file://00_reset_bootcount.sh \
 "
 
-do_compile() {
-    uboot-mkimage -A arm64 -O linux -T script -C none \
-        -n "Torizon A/B boot" -d ${WORKDIR}/boot.cmd ${WORKDIR}/boot.scr
-}
-
 do_install() {
-    # boot.scr lives in each rootfs slot's /boot (the board's U-Boot scans it).
-    # REVIEW: confirm on hardware where the board's U-Boot looks for boot.scr.
+    # boot.scr goes into the FAT boot partition (shared slot SELECTOR; staged by
+    # the wks). Installing it into the rootfs /boot too keeps it with the payload.
     install -d ${D}/boot
     install -m 0644 ${WORKDIR}/boot.scr ${D}/boot/boot.scr
 
