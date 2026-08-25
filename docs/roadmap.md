@@ -9,24 +9,40 @@ Legend: **AC** = acceptance criteria.
 
 ---
 
-## Verdin AM62p (real hardware) — bring-up status
+## U-Boot RAUC hardware bring-up — two machines, one generalized layer
 
-The RAUC A/B variant is now proven on a physical Verdin AM62p (TI K3, U-Boot),
-not just QEMU. Branch `feature/rauc-ab-am62p`. See `docs/am62p-hardware-loop.md`.
+The RAUC A/B variant is proven end-to-end on **two** physical U-Boot boards from
+**different vendors**, both driven by the same generalized `rauc-uboot-ab` glue —
+each machine supplies only a small per-machine data block in
+`conf/distro/include/torizon-ab-uboot.inc` (the "porting contract", see
+`docs/uboot-rauc-porting.md`). Branch `feature/rauc-ab-am62p`. See
+`docs/am62p-hardware-loop.md` (the build→flash→serial loop is machine-generic;
+only the recovery command differs per family).
 
-- **M0 (Done)** — reference build + headless Tezi autoinstall flash loop.
-- **M1 (Done)** — A/B RAUC image builds & boots slot A (`rauc-uboot-ab` U-Boot
-  backend, `torizon-ab-rauc-am62.wks`, squashfs on the TI kernel).
-- **M2 (Done)** — local `rauc install` A→B; greenboot `mark-good` confirms the slot.
-- **M3 (Done)** — rollback (`rauc status mark-bad` → U-Boot boots the good slot).
+**Verdin AM62p (TI K3):** M0 flash, M1 boot slot A, M2 `rauc install` A→B, M3
+rollback, **M4 Torizon Cloud OTA** — all **Done** on hardware (reported
+`Completed`, rollback slot retained; the aktualizr reboot-race did NOT reproduce —
+see `rauc-decisions.md` / `rauc-cloud-test.md`).
+
+**Verdin iMX8MP (NXP i.MX):** M0 flash (Tezi + `uuu`/SDPS recovery), M1 boot slot
+A, M2 `rauc install` A↔B, M3 rollback, **M4 Torizon Cloud OTA** — all **Done** on
+hardware (`Completed` / `UpToDate`, rollback retained). Added as pure per-machine
+data on the generalized layer (fdtfile, `/boot/freescale` DTB dir, eMMC = U-Boot
+`mmc 2`, decompress scratch `0x60000000`) plus one general fix
+(`IMAGE_BOOT_FILES:remove` drops the stock distro `boot.scr` the machine conf
+appends) and a `linux-toradex` squashfs fragment.
+
+- **Generalization (Done)** — hardcoded am62p glue factored into
+  Tier-1 (parameterized `rauc-uboot-ab` + templated `boot.cmd` with runtime
+  GPT-label slot resolution + shared wks), Tier-2 (SoC-family scope `:k3` /
+  `:mx8mp-generic-bsp`), Tier-3 (per-machine data). am62p re-verified, no regression.
 - **Automount hardening (Done)** — inactive-slot exclusion works by PARTLABEL +
-  defensive unmount (not just x86 ext4 labels).
-- **x86-ism audit fix (Done)** — no-ESP fstab is now the default; only x86 mounts
-  the ESP (fixed a latent imx8mp emergency-mode boot under both backends).
-- **M4 (Todo)** — Torizon Cloud + aktualizr A→B on hardware (the aktualizr
-  reboot-race, see `rauc-decisions.md`, will resurface).
-- **imx8mp (Todo)** — resume the draft port; known latent bug: `uboot-ab`
-  `boot.cmd` loads the DTB from a flat `/boot/` path (same class as the AM62p fix).
+  defensive unmount (both boards hit the same boot-race automount of the inactive slot).
+- **x86-ism audit fix (Done)** — no-ESP fstab is the default; only x86 mounts the ESP.
+- **Efficiency pass (Todo)** — the imx8mp bring-up hit three bugs (mmc index, stock
+  `boot.scr` clobber, decompress scratch) that all stem from `boot.cmd`
+  reimplementing what the BSP already does per machine; delegate load+boot to the
+  BSP to remove those per-machine axes, and widen the i.MX family scope.
 
 ---
 

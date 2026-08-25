@@ -69,19 +69,23 @@ bitbake torizon-ab-bundle                  # RAUC payload (signed)
 # QEMU (persistent disk for update tests): runqemu genericx86-64 ovmf wic
 ```
 
-First/primary target is `genericx86-64` (QEMU). `verdin-imx8mp` (U-Boot) is
-draft scaffolding (and carries dormant x86 assumptions — see below).
-**`verdin-am62p` (TI K3, U-Boot) is the real-hardware, primary target** and is
-**proven end-to-end on a physical board**: the A/B RAUC image builds, flashes
-headlessly (Tezi), boots slot A, takes a `rauc install` A→B update, rolls
-back a bad slot, and takes a **full Torizon Cloud + aktualizr OTA update A→B**
-(provisioned + package uploaded + update launched entirely via the REST API,
-reported `Completed`, rollback slot retained) — all via the RAUC U-Boot backend
-(`rauc-uboot-ab`, `bootloader=uboot`, `BOOT_ORDER`/`BOOT_<slot>_LEFT`). See
-`docs/am62p-hardware-loop.md` for the build→flash→serial loop and on-device
-access, and `docs/rauc-cloud-test.md` for the cloud path (incl. the API-driven
-runbook and the real-HW reboot-race finding). The per-machine bootloader glue is isolated (`grub-ab`/`uboot-ab`,
-`rauc-grub-ab`/`rauc-uboot-ab`, per-machine wks) to keep each port tractable.
+First/primary bring-up vehicle is `genericx86-64` (QEMU). **Two real U-Boot boards
+from different vendors are proven end-to-end on hardware via the SAME generalized
+`rauc-uboot-ab` glue** (RAUC U-Boot backend, `bootloader=uboot`,
+`BOOT_ORDER`/`BOOT_<slot>_LEFT`): **`verdin-am62p` (TI K3)** and **`verdin-imx8mp`
+(NXP i.MX)**. Each builds the A/B RAUC image, flashes headlessly (Tezi; recovery
+differs per family — `dfu`/`recovery-linux.sh` on TI, `uuu`/SDPS on NXP), boots
+slot A, takes a `rauc install` A↔B, rolls back, and takes a **full Torizon Cloud +
+aktualizr OTA** (provisioned + package uploaded + update launched via the REST API,
+reported `Completed`, rollback slot retained). Adding imx8mp was **pure per-machine
+data** in `conf/distro/include/torizon-ab-uboot.inc` — no forked logic. See
+`docs/uboot-rauc-porting.md` (the porting contract), `docs/am62p-hardware-loop.md`
+(build→flash→serial loop + on-device access), and `docs/rauc-cloud-test.md` (the
+API-driven cloud runbook + real-HW reboot-race finding). Per-machine bootloader glue
+is isolated (`grub-ab`/`uboot-ab`, `rauc-grub-ab`/`rauc-uboot-ab`) so each port is
+tractable. **Efficiency follow-up:** the three imx8mp bring-up bugs (mmc index, stock
+`boot.scr` clobber, decompress scratch) all came from `boot.cmd` reimplementing what
+the BSP already does per machine — delegate load+boot to the BSP to erase those axes.
 
 **Portability rule (learned the hard way on AM62p):** x86/GRUB/EFI was only a
 bring-up vehicle; the primary targets are ARM SoMs. Never let an x86 assumption

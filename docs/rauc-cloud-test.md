@@ -169,6 +169,20 @@ SSL certificate` while posting update **events** right after boot (before TLS
 settled); the core manifest report still succeeded (cloud went `Completed`). Worth
 characterizing, non-blocking.
 
+## Also verified on real hardware — Verdin iMX8MP (2026-08-25)
+
+The **same** API-driven flow was run against a physical Verdin iMX8MP (NXP i.MX,
+the second U-Boot RAUC target) with no changes to the method — only the
+machine-specific values differ: hardware id `verdin-imx8mp-rootfs`, package
+`torizon-ab-bundle-verdin-imx8mp`, device UUID from `POST /devices`. Result:
+provision → upload (`POST /packages`, **not** `PUT` — `PUT` returns 403) → launch
+(`POST /updates`) → aktualizr downloaded + Uptane-verified → `rauc_actions.sh` →
+`rauc install` to the inactive slot → armed `BOOT_ORDER` → pending-reboot → booted
+the new slot → greenboot `mark-good` → cloud `status = Completed`, device
+`UpToDate`, **rollback slot retained**. The reboot race did **not** reproduce here
+either. This confirms M2/M3/M4 are genuinely machine-agnostic: the handler, the
+aktualizr seam, and the cloud path are identical across TI K3 and NXP i.MX.
+
 ## Notes / gotchas
 
 - The bundle is **plain**-format and **dev-signed** (`/etc/rauc/keyring.pem` is a
