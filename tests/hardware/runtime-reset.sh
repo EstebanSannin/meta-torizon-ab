@@ -45,6 +45,9 @@ HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 . "$HERE/serial-lib.sh"
 
 BACKEND="${TZ_BACKEND:-}"
+# Session password set by enable-access.sh; used only to log in on the serial
+# console when it sits at a login prompt (so we can issue the reboot).
+: "${TZ_NEW_PW:=Xq7#kD2!vLp9}"
 CONFIRM=0
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -68,8 +71,10 @@ catch_uboot() {
     _ser_log "[reset] waiting for U-Boot autoboot window (power-cycle the board if it is off)..."
     ser_expect "Hit any key to stop autoboot|U-Boot SPL|U-Boot 20" 180 \
         || ser_fatal "did not see U-Boot -- is the board powered / cabled to $SERIAL?"
-    # Spam keys to interrupt autoboot.
-    _i=0; while [ "$_i" -lt 40 ]; do ser_send_raw " "; _i=$((_i + 1)); done
+    # Spam keys to interrupt autoboot. The window is short (~1s) and arrives a
+    # little after the SPL banner, so PACE the keys across several seconds rather
+    # than one burst that may all land before (or after) the window.
+    _i=0; while [ "$_i" -lt 30 ]; do ser_send_raw " "; sleep 0.3; _i=$((_i + 1)); done
     ser_send ""
     # Confirm we own the prompt: 'version' prints the U-Boot banner.
     ser_send "version"
@@ -99,18 +104,27 @@ set_env_defaults() {
 
 # --- trigger the first reboot (best-effort; else ask for a power cycle) ------
 trigger_reboot() {
-    _ser_log "[reset] trying to reboot the board via a serial shell..."
+    _ser_log "[reset] rebooting the board via the serial console..."
     ser_send ""
-    # If a torizon/root shell answers, reboot through it.
-    ser_send "echo RESET_PING_$$"
-    if ser_expect "RESET_PING_$$" 6; then
-        ser_send "sudo -n reboot 2>/dev/null || reboot 2>/dev/null || echo NEED_POWER_CYCLE"
-        sleep 2
+    sleep 1
+    # The serial console may be at a login prompt (a reboot needs an authenticated
+    # shell). If so, log in with the throwaway session password enable-access set.
+    if ser_expect "login:" 4; then
+        _ser_log "[reset] serial at a login prompt -- logging in"
+        ser_send "torizon"
+        ser_expect "[Pp]assword:" 8 && ser_send "$TZ_NEW_PW"
+        ser_expect "torizon@|[#$] " 12 || _ser_log "[reset] (login result unclear; trying reboot anyway)"
     fi
+    # Verified send so this works from the busybox initramfs shell too (which
+    # drops fast input). reboot -f does the direct syscall from a normal OS shell
+    # (via our passwordless sudo) AND from the initramfs (root, no init to signal).
+    ser_send_verified "sudo -n reboot -f || reboot -f"
+    sleep 2
     cat <<EOF >&2
 
 [reset] If the board does NOT reboot on its own now, POWER-CYCLE it.
-        (A running-shell reboot needs prior access; a power cycle always works.)
+        (A running-shell reboot needs prior access; a power cycle always works;
+         catch_uboot waits up to 180s for the autoboot window.)
 EOF
 }
 
@@ -123,21 +137,29 @@ wipe_data() {
     # The debug module announces the shell right before the persist module.
     ser_expect "Starting shell before persist" 120 \
         || ser_fatal "did not reach the pre-persist initramfs shell"
-    sleep 1
-    # We are root in the initramfs; data partition is NOT yet mounted.
-    _s="__WIPE_$$__"
-    ser_send "D=/dev/disk/by-label/data; [ -b \$D ] || D=\$(blkid -L data); mkdir -p /mnt/reset && mount -t ext4 \$D /mnt/reset && echo MOUNT_OK_$$ || echo MOUNT_ERR_$$"
-    ser_expect "MOUNT_OK_$$|MOUNT_ERR_$$" 20 || ser_fatal "no response mounting data"
-    tail -c 200 "$SERLOG" | grep -Eaq "MOUNT_OK_$$" || ser_fatal "could not mount the data partition"
-    # Remove everything including dotfiles (the .torizon-ab-seeded marker).
-    ser_send "for f in /mnt/reset/* /mnt/reset/.[!.]* /mnt/reset/..?*; do [ -e \"\$f\" ] && rm -rf \"\$f\"; done; sync; echo ${_s}\$?"
-    ser_expect "${_s}0\\b" 60 || ser_fatal "wipe command failed"
-    ser_send "ls -A /mnt/reset | head; umount /mnt/reset && echo UMOUNT_OK_$$ || echo UMOUNT_ERR_$$"
-    ser_expect "UMOUNT_OK_$$|UMOUNT_ERR_$$" 20 || ser_fatal "no response unmounting data"
-    tail -c 200 "$SERLOG" | grep -Eaq "UMOUNT_OK_$$" || ser_fatal "could not unmount the data partition"
+    sleep 2
+    # We are root in the initramfs; the data partition is NOT yet mounted. The
+    # busybox shell drops fast input, so send each command SLOWLY, keep them
+    # short, and avoid command substitution / long globs. udev has already run
+    # (it precedes the persist module), so /dev/disk/by-label/data exists.
+    # Every command here goes through ser_send_verified: the initramfs console
+    # drops ~1 char/command, so we verify the echo and retry before committing.
+    ser_send_verified "mkdir -p /mnt/reset"
+    ser_send_verified "mount -t ext4 /dev/disk/by-label/data /mnt/reset && echo M_$$_ok || echo M_$$_err"
+    ser_expect "M_$$_ok|M_$$_err" 20 || ser_fatal "no response mounting data"
+    tail -c 400 "$SERLOG" | grep -Eaq "M_$$_ok" || ser_fatal "could not mount the data partition"
+    # Remove everything, including the .torizon-ab-seeded marker (dotfiles). The
+    # `cd &&` guard means a flushed partial can never rm outside the mount.
+    ser_send_verified "cd /mnt/reset && rm -rf * .[!.]* ..?* ; cd / ; echo W_$$_done"
+    ser_expect "W_$$_done" 60 || ser_fatal "wipe command did not complete"
+    ser_send_verified "ls -A /mnt/reset ; echo L_$$_end"
+    ser_expect "L_$$_end" 15 || true
+    ser_send_verified "sync ; umount /mnt/reset && echo U_$$_ok || echo U_$$_err"
+    ser_expect "U_$$_ok|U_$$_err" 20 || ser_fatal "no response unmounting data"
+    tail -c 400 "$SERLOG" | grep -Eaq "U_$$_ok" || ser_fatal "could not unmount the data partition"
     _ser_log "[reset] data partition wiped"
-    # Reboot out of the initramfs (busybox reboot -> direct syscall).
-    ser_send "reboot -f"
+    # Reboot out of the initramfs (busybox reboot -f -> direct syscall).
+    ser_send_verified "reboot -f"
 }
 
 # --- run --------------------------------------------------------------------

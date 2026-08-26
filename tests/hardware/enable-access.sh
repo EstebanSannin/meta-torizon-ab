@@ -77,21 +77,16 @@ sh_run() {
     ser_send "$1; echo ${_s}\$?"
     ser_expect "${_s}0\\b" 30 || ser_fatal "command failed on device: $1"
 }
-# sudo_run "cmd" -- run cmd as root; answers the sudo password prompt if asked.
+# sudo_run "cmd" -- run a PLAIN command as root (NO nested sh -c quoting -- that
+# breaks over serial when cmd itself contains quotes). Answers the sudo password
+# prompt the first time; once NOPASSWD is installed sudo does not prompt.
 sudo_run() {
     _TAG=$((_TAG + 1)); _s="__RC_${_TAG}__"
-    ser_send "sudo -k sh -c '$1'; echo ${_s}\$?"
-    # Either sudo asks for a password, or (once NOPASSWD is in place) it doesn't.
-    if ser_expect "[Pp]assword.*:|${_s}[0-9]" 20; then
-        # If what matched was the password prompt, answer it and wait for the rc.
-        if tail -c 400 "$SERLOG" | grep -Eaq "[Pp]assword.*:[^_]*$"; then
-            ser_send "$TZ_NEW_PW"
-            ser_expect "${_s}[0-9]" 30 || ser_fatal "sudo produced no result: $1"
-        fi
-    else
-        ser_fatal "sudo did not respond: $1"
+    ser_send "sudo -k $1; echo ${_s}\$?"
+    if ser_expect "[Pp]assword[^:]*:" 6; then
+        ser_send "$TZ_NEW_PW"
     fi
-    tail -c 200 "$SERLOG" | grep -Eaq "${_s}0\\b" || ser_fatal "sudo command failed: $1"
+    ser_expect "${_s}0\\b" 30 || ser_fatal "sudo command failed: $1"
 }
 
 # --- get to a working 'torizon' shell, handling the forced password change ---
@@ -173,13 +168,17 @@ if [ "$MODE" = enable ]; then
     sh_run "printf '%s\\n' '$PUBKEY' > \$HOME/.ssh/authorized_keys"
     sh_run "chmod 0600 \$HOME/.ssh/authorized_keys"
 
-    # 2. Passwordless sudo -> /etc overlay upper (data partition).
-    sudo_run "printf '%s ALL=(ALL) NOPASSWD:ALL\\n' torizon > /etc/sudoers.d/90-torizon-nopw; chmod 0440 /etc/sudoers.d/90-torizon-nopw"
+    # 2. Passwordless sudo -> /etc overlay upper (data partition). Build the file
+    #    as torizon first (no nested quoting over serial), then install as root.
+    sh_run   "printf 'torizon ALL=(ALL) NOPASSWD:ALL\\n' > /tmp/nopw.tzn"
+    sudo_run "install -m 0440 -o root -g root /tmp/nopw.tzn /etc/sudoers.d/90-torizon-nopw"
+    sh_run   "rm -f /tmp/nopw.tzn"
 
     # 3. Normalise aging so PAM's account phase never blocks headless key SSH
     #    (-> /etc/shadow in the overlay upper). The password change already reset
-    #    last-change; this makes it explicit and disables expiry.
-    sudo_run "chage -d \$(date +%Y-%m-%d) -m 0 -M -1 -I -1 -E -1 torizon; passwd -x -1 torizon"
+    #    last-change; this makes it explicit and disables expiry. Board-side date.
+    sudo_run "chage -d \$(date +%Y-%m-%d) -m 0 -M -1 -I -1 -E -1 torizon"
+    sudo_run "passwd -x -1 torizon"
 
     # 4. Report the address to SSH to.
     ser_send "ip -4 -o addr show scope global | awk '{print \"BOARD_IP \" \$2 \" \" \$4}'"

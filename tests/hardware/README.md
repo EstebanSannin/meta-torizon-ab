@@ -40,6 +40,23 @@ layout this relies on.
 **Never open `/dev/ttyUSB5`** — it is the dead sibling interface of the AM62P
 serial bridge. Only one reader may hold a tty at a time.
 
+### Attaching to an existing serial logger
+
+This bench keeps a persistent logger on each port
+(`cat /dev/ttyUSB3 > /tmp/imx8-serial.log`, `… ttyUSB4 > /tmp/am62-serial.log`).
+Two readers on one tty split the bytes and corrupt both captures, so the harness
+**auto-detects** a running logger and attaches to it — writing to the tty and
+tailing the logger's file, killing nothing. In attach mode you must tell it which
+file to tail:
+
+```sh
+SERIAL=/dev/ttyUSB4 SERLOG=/tmp/am62-serial.log ./enable-access.sh      # am62p
+SERIAL=/dev/ttyUSB3 SERLOG=/tmp/imx8-serial.log ./enable-access.sh      # imx8mp
+```
+
+With no logger running, the harness starts (and later stops) its own reader; pass
+`SER_ATTACH=1 SERLOG=<file>` to force attach explicitly.
+
 ## `enable-access.sh` — inject ephemeral access
 
 Logs in on the serial console (handling stock Torizon's forced first-boot
@@ -93,3 +110,19 @@ without a reflash.
 `cat` into a log + `printf` into the device + polled `grep`), because pexpect /
 pyserial are not reliably present on the bench. Each on-device command is verified
 with a sentinel (`… ; echo __RC__$?`) rather than by matching a prompt string.
+
+Reliability details learned driving real hardware:
+
+- **One write fd for the session.** `ser_open` opens the tty for writing once
+  (fd 4) and every send reuses it; opening the port per command/char glitches the
+  line.
+- **The busybox initramfs console is lossy.** Unlike the full-userspace login
+  shell (proper tty line discipline), the pre-persist initramfs shell
+  (`sh: can't access tty; job control turned off`) drops ~1 char per command.
+  Commands sent there go through `ser_send_verified`, which types slowly, checks
+  the console echoed the command back verbatim (ignoring cosmetic line-wraps —
+  long lines hard-wrap at ~80 cols), and retries before committing with Enter.
+  Keep those commands short, guarded (`cd X && …`), and idempotent.
+- **`reboot -f` works from both** a normal OS shell (via passwordless sudo) and
+  the initramfs (root, direct syscall); `runtime-reset.sh` logs in on the serial
+  console first if it finds a login prompt.
