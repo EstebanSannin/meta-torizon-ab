@@ -107,10 +107,13 @@ CORE_IMAGE_BASE_INSTALL:append = " \
     resize-data-helper \
 "
 
-# DEV-ONLY: dev SSH key + passwordless sudo so a freshly-flashed image is SSH-able
-# with no manual first-boot setup (counterpart of the in-tree dev signing keys).
-# Remove for production. See recipes-core/torizon-ab-devaccess.
-CORE_IMAGE_BASE_INSTALL:append = " torizon-ab-devaccess"
+# NOTE ON DEV/TEST ACCESS: this image is deliberately PRISTINE -- it ships NO dev
+# SSH key, NO passwordless sudo, and NO provisioning identity, so the deployable
+# artifact (.wic/.swu/.raucb) is bit-identical to what is tested and safe to ship.
+# Dev/test access is injected at runtime by the test harness over the serial
+# console (writing only to the data partition, never a rootfs slot); it is never
+# baked into the image. See meta-torizon-ab/tests/hardware/ (enable-access.sh /
+# runtime-reset.sh) and docs/am62p-hardware-loop.md.
 
 # The OS-update engine is backend-specific (selected by the distro).
 CORE_IMAGE_BASE_INSTALL:append:torizon-ab-swupdate = " swupdate"

@@ -52,17 +52,45 @@ Host verdin
   StrictHostKeyChecking no
   UserKnownHostsFile /dev/null
 ```
-First-boot bootstrap (once per fresh flash): the `torizon` user forces a password
-change at first login — do it over serial, then add your SSH pubkey to
-`~torizon/.ssh/authorized_keys`, then have a human enable passwordless sudo
-(`/etc/sudoers.d/90-torizon-nopw`). The dev password is kept out of this repo —
-see the project's private notes. NEVER script the password into `sudo`.
+First-boot bootstrap (once per fresh flash) — **use the test harness, not manual
+steps.** The image is **pristine on purpose**: it ships no dev key, no passwordless
+sudo, and no provisioning identity, so the deployed artifact is bit-identical to the
+tested one. Access is injected at runtime over serial by
+[`../tests/hardware/enable-access.sh`](../tests/hardware/enable-access.sh), which
+handles stock Torizon's forced first-boot password change, installs a session SSH
+key, and enables passwordless sudo — writing only to the **data partition** (never
+a rootfs slot):
+
+```sh
+# on beerus (serial port per the board — see the table below):
+SERIAL=/dev/ttyUSB4 TZ_SESSION_PUBKEY_FILE=~/.ssh/ota_ce_vm.pub \
+  ../tests/hardware/enable-access.sh                 # am62p (imx8mp = ttyUSB3)
+```
+
+There is no secret in the repo: the bootstrap password is Torizon's public default
+(`torizon`, expired by `passwd -e` on first boot); the session password the harness
+sets is a throwaway on a device that gets reflashed. To reset a device to a clean
+provisioning state without a reflash, use
+[`../tests/hardware/runtime-reset.sh`](../tests/hardware/runtime-reset.sh) (data
+partition + boot-env only — **not** a factory reset; a reflash is the only true
+factory reset). See [`../tests/hardware/README.md`](../tests/hardware/README.md).
 
 ### Serial console (beerus)
-Yavia debug bridge = **Silicon Labs CP2105 dual UART**:
-- `/dev/ttyUSB0` (CP2105 interface 0) = **A53 Linux/U-Boot console** — use this.
-- `/dev/ttyUSB1` (interface 1) = secondary UART, dead.
-- **115200 8N1.** Only one reader at a time — kill stray `cat /dev/ttyUSB0` first.
+Yavia debug bridge = **Silicon Labs CP2105 dual UART**: interface 0 = **A53
+Linux/U-Boot console** (use this), interface 1 = secondary UART, dead. **115200
+8N1.** Only one reader at a time — kill any stray `cat` on the port first.
+
+The `ttyUSBn` index depends on enumeration order. **On the current two-board
+bench** (both a Verdin iMX8MP and a Verdin AM62P wired to beerus):
+
+| Board  | Console (CP2105 if0) | Dead sibling (if1) |
+|--------|----------------------|--------------------|
+| iMX8MP | `/dev/ttyUSB3`       | —                  |
+| AM62P  | `/dev/ttyUSB4`       | `/dev/ttyUSB5`     |
+
+**Never open `/dev/ttyUSB5`** (the AM62P bridge's dead interface). With a single
+AM62P board attached the console enumerates as `/dev/ttyUSB0` (as in the flashing
+commands below — adjust to `ttyUSB4` on the two-board bench).
 
 Quick capture (raw, non-interactive):
 ```sh

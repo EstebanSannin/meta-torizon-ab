@@ -239,6 +239,19 @@ device pass.
 **AC:** the checklist reproduces flash→provision→update→rollback→persistence on
 QEMU and on real hardware; auto-expand verified on a larger-than-image medium.
 
+**Dev/test access — delivered (pristine-image design).** The deployable image is
+kept **pristine**: no dev SSH key, no passwordless sudo, no provisioning identity
+baked into any rootfs slot, so the deployed artifact (`.wic`/`.swu`/`.raucb`) is
+**bit-identical to the tested one** (test == deploy). Access is injected at runtime
+by the serial harness in `tests/hardware/` (`enable-access.sh`), touching only the
+**data partition** — never a rootfs slot; a reflash removes it. `runtime-reset.sh`
+resets runtime state (data partition + boot-env A/B defaults) without a reflash —
+scoped honestly as a **runtime/provisioning reset, NOT a factory reset** (once A/B
+tests overwrite a slot's original bytes there is no software way back; a true
+factory reset = reflash, which the pipeline does anyway). This replaced the earlier
+`torizon-ab-devaccess` recipe, which wrongly baked the dev key + enabling service
+into the rootfs.
+
 ### B11 — Upstream tooling issues (tracking) (priority: TBD)
 Track/report: `uptane-sign` S3 multipart-completion bug on large `.swu` uploads;
 `torizoncore-builder platform push` routing a file to the OSTree path when it
