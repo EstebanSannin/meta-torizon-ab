@@ -1,7 +1,7 @@
 #!/bin/sh
 # serial-lib.sh -- minimal send/expect over a serial console, POSIX sh.
 #
-# Sourced by the hardware test harness (enable-access.sh, runtime-reset.sh). It
+# Sourced by the hardware test harness (enable-access.sh). It
 # drives a board's serial console the way we do by hand: a background `cat` of
 # the tty appends to a log file, we `printf` into the tty to type, and we poll
 # the log for expected output. Kept deliberately dependency-free (busybox on
@@ -67,7 +67,18 @@ ser_open() {
         # We only WRITE to the tty; do not reconfigure it (the logger owns stty).
         SER_CAT_PID=""
         SER_OFF=$(wc -c < "$SERLOG" | tr -d ' ')   # ignore pre-existing output
-        _ser_log "[serial] ATTACH $SERIAL, tailing $SERLOG from byte $SER_OFF (no reader started)"
+        # LIVENESS GUARD: a dead/stale logger silently freezes the capture, which
+        # makes every ser_expect "time out" -- a nasty trap (the background `cat`
+        # can exit on EOF when the board reboots and the USB serial re-enumerates).
+        # Confirm the capture actually grows (nudge the console with a CR, watch
+        # the file). Fail loudly if it does not.
+        _lz=$(wc -c < "$SERLOG" | tr -d ' '); printf '\r' >&4 2>/dev/null || true
+        _lc=0; while [ "$_lc" -lt 5 ]; do sleep 1
+            [ "$(wc -c < "$SERLOG" | tr -d ' ')" -gt "$_lz" ] && break; _lc=$((_lc + 1)); done
+        [ "$(wc -c < "$SERLOG" | tr -d ' ')" -gt "$_lz" ] \
+            || ser_fatal "attach: $SERLOG is not growing -- the serial logger is dead/stale. Restart it (e.g. the imx8-serial/am62-serial capture) before running."
+        SER_OFF=$(wc -c < "$SERLOG" | tr -d ' ')
+        _ser_log "[serial] ATTACH $SERIAL, tailing $SERLOG from byte $SER_OFF (logger live)"
         return 0
     fi
 
@@ -96,73 +107,12 @@ ser_send() {
     printf '%s\r' "$1" >&4 || ser_fatal "write to $SERIAL failed"
 }
 
-# ser_send_raw "text" -- type text with no trailing CR (for control chars, e.g.
-# interrupting autoboot with a stream of newlines/keys).
-ser_send_raw() {
-    printf '%s' "$1" >&4 || ser_fatal "write to $SERIAL failed"
-}
-
-# ser_send_slow "text" -- type one char at a time with a small delay, then CR.
-# For consoles that drop characters on a fast burst -- notably the busybox
-# initramfs shell ("can't access tty; job control turned off"). CRITICAL: hold
-# the tty open for the whole command (fd 3); reopening the port per character
-# (`> $SERIAL` each char) glitches the line and drops characters -- that, not the
-# receiver, was the real cause of initramfs garbling. Pure parameter expansion,
-# no per-char subshell.
-: "${SER_SLOW_DELAY:=0.05}"
-ser_send_slow() {
-    _ser_log "[serial] send (slow): $1"
-    _s="$1"
-    while [ -n "$_s" ]; do
-        printf '%s' "${_s%"${_s#?}"}" >&4
-        _s=${_s#?}
-        sleep "$SER_SLOW_DELAY"
-    done
-    printf '\r' >&4
-}
-
-# ser_send_verified "cmd" [tries] -- RELIABLY type cmd into a lossy console.
-# Types it (fd held, paced), reads the echo, and only presses Enter to COMMIT if
-# the console echoed cmd verbatim; otherwise it presses Enter to flush the garbled
-# line (which runs as a harmless "not found" against a fresh prompt) and retries.
-# This is the only dependable way to drive the busybox initramfs console, which
-# drops ~1 char per command even fd-held. Keep cmds guarded (&&) and idempotent so
-# a flushed partial is safe. Returns 0 on a verified send.
-ser_send_verified() {
-    _cmd="$1"; _tries="${2:-8}"; _k=0
-    while [ "$_k" -lt "$_tries" ]; do
-        _k=$((_k + 1))
-        _before=$(wc -c < "$SERLOG" | tr -d ' ')
-        _s="$_cmd"
-        while [ -n "$_s" ]; do
-            printf '%s' "${_s%"${_s#?}"}" >&4
-            _s=${_s#?}
-            sleep "${SER_SLOW_DELAY:-0.05}"
-        done
-        sleep 0.6
-        # Strip CR/LF from the echo before matching: the console hard-wraps long
-        # command lines (inserting a newline mid-command), which would defeat a
-        # verbatim substring match even though the command was typed correctly. A
-        # genuinely DROPPED char removes a non-newline char, so this still fails
-        # (and retries) on real drops -- it only forgives cosmetic line wraps.
-        _echo=$(tail -c "+$((_before + 1))" "$SERLOG" 2>/dev/null | tr -d '\r\n')
-        case "$_echo" in
-            *"$_cmd"*)
-                _ser_log "[serial] verified: $_cmd"
-                printf '\r' >&4; sleep 0.4; return 0;;
-            *)
-                _ser_log "[serial] garbled (try $_k), reflushing: $_cmd"
-                printf '\r' >&4; sleep 0.8;;
-        esac
-    done
-    ser_fatal "could not reliably type into console after $_tries tries: $_cmd"
-}
-
 # ser_expect "ERE" [timeout] -- wait until ERE appears in output produced since
 # the last successful expect. Returns 0 and advances the offset on match; returns
 # 1 on timeout (offset unchanged, so the caller can try an alternative pattern).
 ser_expect() {
     _pat="$1"; _to="${2:-$SER_DEFAULT_TIMEOUT}"; _n=0
+    _sz0=$(wc -c < "$SERLOG" 2>/dev/null | tr -d ' ')
     _ser_log "[serial] expect: /$_pat/  (<= ${_to}s)"
     while [ "$_n" -lt "$_to" ]; do
         if tail -c "+$((SER_OFF + 1))" "$SERLOG" 2>/dev/null | grep -Eaq "$_pat"; then
@@ -172,7 +122,11 @@ ser_expect() {
         fi
         sleep 1; _n=$((_n + 1))
     done
-    _ser_log "[serial]   TIMEOUT after ${_to}s waiting for /$_pat/"
+    if [ "$(wc -c < "$SERLOG" 2>/dev/null | tr -d ' ')" = "$_sz0" ]; then
+        _ser_log "[serial]   TIMEOUT after ${_to}s waiting for /$_pat/ -- capture did NOT grow (serial logger likely dead/stale)"
+    else
+        _ser_log "[serial]   TIMEOUT after ${_to}s waiting for /$_pat/"
+    fi
     return 1
 }
 

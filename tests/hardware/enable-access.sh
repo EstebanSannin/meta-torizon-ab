@@ -9,7 +9,7 @@
 #   NOT in the image -- the harness adds it at runtime, and every change it makes
 #   lands on the DATA PARTITION only (authorized_keys -> /home; sudoers + shadow
 #   -> the /etc overlay upper; both backed by LABEL=data), never in a rootfs
-#   slot. A reflash (or runtime-reset.sh) removes all of it.
+#   slot. A reflash removes all of it (reflash is how a device is reset).
 #
 # WHAT IT DOES (default mode)
 #   1. Logs in on the serial console as 'torizon'. On a fresh flash stock Torizon
@@ -196,7 +196,7 @@ else
     echo
     echo "== access torn down =="
     echo "Note: the throwaway password ($TZ_NEW_PW) and any /var/sota provisioning"
-    echo "remain until a reflash or runtime-reset.sh. A reflash is the true reset."
+    echo "remain until a reflash -- reflashing is how a device is reset to clean."
 fi
 
 ser_close

@@ -1,11 +1,11 @@
-# Hardware test harness — dev/test access & runtime reset
+# Hardware test harness — dev/test access
 
-These scripts inject **ephemeral** dev/test access into a running Torizon OS A/B
-device, and reset its runtime state, **over the serial console**. They are the
-runtime counterpart of the deliberately **pristine** deployable image.
+`enable-access.sh` injects **ephemeral** dev/test access into a running, pristine
+Torizon OS A/B device **over the serial console**. It is the runtime counterpart
+of the deliberately **pristine** deployable image.
 
-> **They are NOT part of any image.** Nothing here is installed into the
-> `.wic`/`.swu`/`.raucb`. Run them on the host physically wired to the board
+> **It is NOT part of any image.** Nothing here is installed into the
+> `.wic`/`.swu`/`.raucb`. Run it on the host physically wired to the board
 > (`beerus`).
 
 ## Why the image is pristine (the whole point)
@@ -23,10 +23,9 @@ change it makes lands on the **data partition** only, never in a rootfs slot:
 |--------------------------------|-----------------|----------------------------------------------|
 | session `authorized_keys`      | `/home/torizon` | bind → `data:/persist/home`                  |
 | `sudoers.d`, `/etc/shadow`     | `/etc` (overlay)| `data:/persist/etc/upper`                    |
-| provisioning (`/var/sota`)     | `/var`          | the data partition itself                    |
 
-A reflash — or `runtime-reset.sh` — removes all of it. The rootfs slots (the
-thing actually under test) are never modified, so what you flash, test, and
+A **reflash** removes all of it (see "Resetting a device" below). The rootfs slots
+(the thing actually under test) are never modified, so what you flash, test, and
 deploy is the same bytes. See `../../docs/persistence.md` for the data-partition
 layout this relies on.
 
@@ -55,7 +54,9 @@ SERIAL=/dev/ttyUSB3 SERLOG=/tmp/imx8-serial.log ./enable-access.sh      # imx8mp
 ```
 
 With no logger running, the harness starts (and later stops) its own reader; pass
-`SER_ATTACH=1 SERLOG=<file>` to force attach explicitly.
+`SER_ATTACH=1 SERLOG=<file>` to force attach explicitly. (`serial-lib.sh` fails
+loudly if an attached logger's file stops growing — a dead `cat` reader would
+otherwise make every read silently stale.)
 
 ## `enable-access.sh` — inject ephemeral access
 
@@ -67,8 +68,9 @@ blocked by PAM.
 
 ```sh
 # on beerus:
-SERIAL=/dev/ttyUSB4 TZ_SESSION_PUBKEY_FILE=~/.ssh/ota_ce_vm.pub ./enable-access.sh
-SERIAL=/dev/ttyUSB4 ./enable-access.sh --teardown      # best-effort removal
+SERIAL=/dev/ttyUSB4 SERLOG=/tmp/am62-serial.log \
+  TZ_SESSION_PUBKEY_FILE=~/.ssh/ota_ce_vm.pub ./enable-access.sh
+SERIAL=/dev/ttyUSB4 SERLOG=/tmp/am62-serial.log ./enable-access.sh --teardown
 ```
 
 There is **no secret in this repo**: the bootstrap password is Torizon's public
@@ -77,52 +79,41 @@ Override the session key with `TZ_SESSION_PUBKEY` (a key string) or
 `TZ_SESSION_PUBKEY_FILE` (default `~/.ssh/ota_ce_vm.pub`), and the session
 password with `TZ_NEW_PW`.
 
-## `runtime-reset.sh` — runtime/provisioning reset (NOT factory)
+**Validated on real hardware** (2026-08-26) on both the Verdin AM62P (RAUC) and
+Verdin iMX8MP (SWUpdate): the dev key is rejected on a fresh flash (proving the
+image is pristine), and after `enable-access.sh` the session key + passwordless
+sudo work over SSH, with the changes confirmed on the data partition only.
 
-Wipes the data partition (so `/var/sota` provisioning, `/home`, the `/etc`
-overlay upper, and the seed marker are gone and the initramfs re-seeds factory
-`/var`+`/home` next boot) and resets the boot-env A/B selection variables to
-their factory defaults. **It does not touch either rootfs slot.**
+## Resetting a device
 
-```sh
-SERIAL=/dev/ttyUSB4 ./runtime-reset.sh --backend rauc     --yes   # am62p
-SERIAL=/dev/ttyUSB3 ./runtime-reset.sh --backend swupdate --yes   # imx8mp
-```
+**To restore a device to a clean state, reflash it.** Because the pipeline
+reflashes for each test image anyway, reflash *is* the reset — and it is the only
+true factory reset (once A/B update tests overwrite a slot's original bytes, the
+device keeps no copy of the built image, so there is no software way back). See
+`../../docs/am62p-hardware-loop.md` for the flash loop.
 
-It works entirely over serial via the boot script's `${tdxargs}` passthrough:
-reboot → U-Boot sets the boot-env defaults and arms a one-shot
-`tdxargs=shell=before:persist`, which drops the initramfs into a shell **before**
-the persistence module mounts the data partition; the shell mounts it, `rm -rf`s
-it, unmounts, and reboots clean (with `tdxargs` cleared). No image change and no
-`fw_setenv`/`grub` tools are needed on the device.
+There is deliberately **no** in-tree software-reset tool. An earlier serial-driven
+`runtime-reset.sh` (reboot → U-Boot boot-env defaults → a pre-persist initramfs
+shell that wiped the data partition → re-seed) was prototyped and worked on am62p,
+but driving the transient initramfs debug shell over serial proved brittle, so it
+was dropped in favour of "just reflash".
 
-### This is not a factory reset
+**Future (not built):** a reset that runs entirely over the reliable SSH/normal
+console — e.g. reformat the whole data partition (or clear the `/etc` overlay
+upper + `/home` + `/var/sota`) and reset the boot-env via `fw_setenv` — to get a
+clean provisioning start without a full reflash. This avoids the initramfs shell
+entirely. Scoped as a follow-up.
 
-Once A/B update tests have overwritten a slot's original bytes, the factory image
-is gone — the device keeps no copy of the built image, so there is **no software
-way back**. A true factory reset = **reflash**, which the pipeline does anyway for
-the next test image. Use this only for tests that need a clean provisioning start
-without a reflash.
+## Implementation note (`serial-lib.sh`)
 
-## Implementation note
+A dependency-free POSIX send/expect over the tty (background `cat` into a log +
+`printf` into the device + polled `grep`), because pexpect / pyserial are not
+reliably present on the bench. Each on-device command is verified with a sentinel
+(`… ; echo __RC__$?`) rather than by matching a prompt string. Learnings baked in:
 
-`serial-lib.sh` is a dependency-free POSIX send/expect over the tty (background
-`cat` into a log + `printf` into the device + polled `grep`), because pexpect /
-pyserial are not reliably present on the bench. Each on-device command is verified
-with a sentinel (`… ; echo __RC__$?`) rather than by matching a prompt string.
-
-Reliability details learned driving real hardware:
-
-- **One write fd for the session.** `ser_open` opens the tty for writing once
-  (fd 4) and every send reuses it; opening the port per command/char glitches the
-  line.
-- **The busybox initramfs console is lossy.** Unlike the full-userspace login
-  shell (proper tty line discipline), the pre-persist initramfs shell
-  (`sh: can't access tty; job control turned off`) drops ~1 char per command.
-  Commands sent there go through `ser_send_verified`, which types slowly, checks
-  the console echoed the command back verbatim (ignoring cosmetic line-wraps —
-  long lines hard-wrap at ~80 cols), and retries before committing with Enter.
-  Keep those commands short, guarded (`cd X && …`), and idempotent.
-- **`reboot -f` works from both** a normal OS shell (via passwordless sudo) and
-  the initramfs (root, direct syscall); `runtime-reset.sh` logs in on the serial
-  console first if it finds a login prompt.
+- **One write fd for the session** (`fd 4`, opened once in `ser_open`) — opening
+  the port per command glitches the line.
+- **Dead-logger guard.** When attaching to an external logger, `ser_open` confirms
+  the capture actually grows and `ser_expect` flags a frozen capture — the
+  background `cat` can exit on EOF when a board reboots and the USB serial
+  re-enumerates, which would otherwise make every read silently stale.

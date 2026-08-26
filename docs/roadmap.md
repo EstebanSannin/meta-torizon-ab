@@ -244,13 +244,21 @@ kept **pristine**: no dev SSH key, no passwordless sudo, no provisioning identit
 baked into any rootfs slot, so the deployed artifact (`.wic`/`.swu`/`.raucb`) is
 **bit-identical to the tested one** (test == deploy). Access is injected at runtime
 by the serial harness in `tests/hardware/` (`enable-access.sh`), touching only the
-**data partition** — never a rootfs slot; a reflash removes it. `runtime-reset.sh`
-resets runtime state (data partition + boot-env A/B defaults) without a reflash —
-scoped honestly as a **runtime/provisioning reset, NOT a factory reset** (once A/B
-tests overwrite a slot's original bytes there is no software way back; a true
-factory reset = reflash, which the pipeline does anyway). This replaced the earlier
+**data partition** — never a rootfs slot; a reflash removes it. HW-validated on both
+the Verdin AM62P (RAUC) and iMX8MP (SWUpdate): dev key rejected on a fresh flash,
+then key + passwordless sudo injected over serial. This replaced the earlier
 `torizon-ab-devaccess` recipe, which wrongly baked the dev key + enabling service
 into the rootfs.
+
+**Reset = reflash (by design).** To restore a device to a clean state, reflash it;
+since the pipeline reflashes for each test image, reflash *is* the reset (and the
+only true factory reset). A serial-driven `runtime-reset.sh` (U-Boot boot-env
+defaults → pre-persist initramfs shell → wipe data partition → re-seed) was
+prototyped and worked on am62p, but driving the transient initramfs debug shell
+over serial proved brittle, so it was dropped. **Backlog:** an SSH/console-driven
+reset (reformat the data partition or clear the `/etc` overlay upper + `/home` +
+`/var/sota`, and `fw_setenv` the boot-env) for a clean provisioning start without a
+full reflash — avoids the initramfs shell entirely.
 
 ### B11 — Upstream tooling issues (tracking) (priority: TBD)
 Track/report: `uptane-sign` S3 multipart-completion bug on large `.swu` uploads;

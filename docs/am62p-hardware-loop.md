@@ -62,18 +62,17 @@ key, and enables passwordless sudo — writing only to the **data partition** (n
 a rootfs slot):
 
 ```sh
-# on beerus (serial port per the board — see the table below):
-SERIAL=/dev/ttyUSB4 TZ_SESSION_PUBKEY_FILE=~/.ssh/ota_ce_vm.pub \
-  ../tests/hardware/enable-access.sh                 # am62p (imx8mp = ttyUSB3)
+# on beerus (serial port + logger file per the board — see the table below):
+SERIAL=/dev/ttyUSB4 SERLOG=/tmp/am62-serial.log \
+  TZ_SESSION_PUBKEY_FILE=~/.ssh/ota_ce_vm.pub \
+  ../tests/hardware/enable-access.sh                 # am62p (imx8mp: ttyUSB3 / imx8-serial.log)
 ```
 
 There is no secret in the repo: the bootstrap password is Torizon's public default
 (`torizon`, expired by `passwd -e` on first boot); the session password the harness
-sets is a throwaway on a device that gets reflashed. To reset a device to a clean
-provisioning state without a reflash, use
-[`../tests/hardware/runtime-reset.sh`](../tests/hardware/runtime-reset.sh) (data
-partition + boot-env only — **not** a factory reset; a reflash is the only true
-factory reset). See [`../tests/hardware/README.md`](../tests/hardware/README.md).
+sets is a throwaway on a device that gets reflashed. **To reset a device to a clean
+state, reflash it** — the flash loop below is the reset (and the only true factory
+reset). See [`../tests/hardware/README.md`](../tests/hardware/README.md).
 
 ### Serial console (beerus)
 Yavia debug bridge = **Silicon Labs CP2105 dual UART**: interface 0 = **A53

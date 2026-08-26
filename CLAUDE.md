@@ -136,9 +136,12 @@ commands, and every gotcha are in `docs/am62p-hardware-loop.md`.
   SSH key, no passwordless sudo, no provisioning identity goes into any rootfs
   slot, so the deployed artifact is bit-identical to the tested one (test ==
   deploy). Access is injected at runtime by the serial harness in `tests/hardware/`
-  (`enable-access.sh`), writing only to the **data partition**; `runtime-reset.sh`
-  resets runtime state (data partition + boot-env) but is **not** a factory reset
-  (reflash = the only true factory reset). Nothing in `tests/hardware/` is ever
-  added to an image. Do not reintroduce a recipe that installs access into the
-  rootfs (the removed `torizon-ab-devaccess` was exactly that mistake).
+  (`enable-access.sh`), writing only to the **data partition**. Nothing in
+  `tests/hardware/` is ever added to an image. Do not reintroduce a recipe that
+  installs access into the rootfs (the removed `torizon-ab-devaccess` was exactly
+  that mistake).
+- **Reset a device by reflashing** — the pipeline reflashes for each test image, so
+  reflash *is* the reset (and the only true factory reset). There is intentionally
+  no software-reset tool; a serial `runtime-reset.sh` was prototyped and dropped as
+  brittle. A future SSH/console-driven reset is backlogged (see `docs/roadmap.md`).
 - Prefer changes that keep the two backends symmetric behind the seam.
