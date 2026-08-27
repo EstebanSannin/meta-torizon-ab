@@ -16,7 +16,7 @@ BOOT_PREAMBLE = "boot-select-swupdate.cmd"
 
 inherit systemd
 
-COMPATIBLE_MACHINE = "verdin-imx8mp"
+COMPATIBLE_MACHINE = "verdin-am62p|verdin-imx8mp"
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 
 # fw_setenv/fw_printenv (real U-Boot env) at runtime; greenboot hooks.

@@ -127,6 +127,9 @@ CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc     = " rauc rauc-conf"
 CORE_IMAGE_BASE_INSTALL:append:torizon-ab-swupdate:genericx86-64   = " grub-ab"
 CORE_IMAGE_BASE_INSTALL:append:torizon-ab-swupdate:intel-corei7-64 = " grub-ab"
 CORE_IMAGE_BASE_INSTALL:append:torizon-ab-swupdate:verdin-imx8mp   = " uboot-ab"
+# TI K3 (verdin-am62p, ...) SWUpdate: same uboot-ab glue, family-scoped like RAUC
+# (:k3 above) so a new K3 machine inherits it. See roadmap B15.
+CORE_IMAGE_BASE_INSTALL:append:torizon-ab-swupdate:k3              = " uboot-ab"
 # RAUC backend: RAUC's native grub bootloader backend + its grubenv bootstrap.
 CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc:genericx86-64       = " rauc-grub-ab"
 CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc:intel-corei7-64     = " rauc-grub-ab"
@@ -147,6 +150,7 @@ CORE_IMAGE_BASE_INSTALL:append:torizon-ab-rauc:mx8mp-generic-bsp = " rauc-uboot-
 IMAGE_BOOT_FILES:torizon-ab-rauc:k3                    = "rauc-uboot-ab-boot.scr;boot.scr"
 IMAGE_BOOT_FILES:torizon-ab-rauc:mx8mp-generic-bsp     = "rauc-uboot-ab-boot.scr;boot.scr"
 IMAGE_BOOT_FILES:torizon-ab-swupdate:mx8mp-generic-bsp = "uboot-ab-boot.scr;boot.scr"
+IMAGE_BOOT_FILES:torizon-ab-swupdate:k3                = "uboot-ab-boot.scr;boot.scr"
 # Some machine confs (e.g. verdin-imx8mp) do IMAGE_BOOT_FILES:append with the
 # stock distro boot script ("boot.scr-${MACHINE};boot.scr"), staged AFTER — and
 # thus overwriting — our A/B slot-selector. :remove applies after :append, so drop
@@ -156,6 +160,7 @@ IMAGE_BOOT_FILES:remove = "boot.scr-${MACHINE};boot.scr"
 do_image_wic[depends] += "${@bb.utils.contains('TORIZON_AB_UPDATER', 'rauc',     bb.utils.contains('MACHINE', 'verdin-am62p',  'rauc-uboot-ab:do_deploy', '', d), '', d)}"
 do_image_wic[depends] += "${@bb.utils.contains('TORIZON_AB_UPDATER', 'rauc',     bb.utils.contains('MACHINE', 'verdin-imx8mp', 'rauc-uboot-ab:do_deploy', '', d), '', d)}"
 do_image_wic[depends] += "${@bb.utils.contains('TORIZON_AB_UPDATER', 'swupdate', bb.utils.contains('MACHINE', 'verdin-imx8mp', 'uboot-ab:do_deploy',      '', d), '', d)}"
+do_image_wic[depends] += "${@bb.utils.contains('TORIZON_AB_UPDATER', 'swupdate', bb.utils.contains('MACHINE', 'verdin-am62p',  'uboot-ab:do_deploy',      '', d), '', d)}"
 
 # The rootfs subsystem secondary + swupdate_actions.sh handler are added to the
 # shared aktualizr secondaries via a bbappend to aktualizr-default-sec (pulled
