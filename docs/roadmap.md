@@ -144,12 +144,63 @@ the layer repo as the manifest repo AND list it as a project, fetching it twice.
 "include upstream + overlay" middle ground — it's fork (A) or `local_manifests`
 overlay (B).
 
-**Decision:** TBD (leaning B).
-**AC:** from a clean checkout, the documented steps (Option A: `repo init -u <manifest> && repo sync`;
-Option B: Toradex `repo init` + copy fragment + `repo sync`) followed by
-`. setup-environment build && bitbake torizon-ab-swu` produce the image and
-`.swu` with no manual layer/DISTRO edits; revisions pinned for reproducibility;
-steps captured in the README.
+**Decision:** **Option A** (chosen over the earlier B-lean because a public
+"build it yourself" on-ramp is a first-class goal — single `repo init`). Drift is
+neutralized by vendoring upstream at the **root** (repo `<include>` is root-relative,
+so the upstream tree must sit at root; can't tuck it under a subpath) at a pinned
+rev, refreshed by a script — not a hand-fork. Multi-vendor scalable: mirrors
+Toradex's new "everything outside BSP" layout `torizon-ab/<vendor>/<channel>.xml`
+with a single shared `overlay.xml` (meta-swupdate + meta-rauc + meta-torizon-ab).
+
+**Status (2026-08-26): DONE — validated end-to-end on m920x.** Separate repo
+`torizon-ab-manifest` (sibling dir; not yet pushed — will go to
+`github.com/EstebanSannin/torizon-ab-manifest`). Upstream pinned to
+`scarthgap-7.x.y` @ `c8749217` via `scripts/update-upstream.sh` + `UPSTREAM.env`.
+Channels `release`/`nightly`/`next` (mirroring Toradex's rename of `default.xml`
+→ `release.xml`); vendor dirs mirror the new "everything outside BSP" layout
+(`torizon-ab/<vendor>/<channel>.xml`, tdx as a vendor). Overlay
+`torizon-ab/overlay.xml` = meta-swupdate + meta-rauc + meta-torizon-ab.
+
+Validation (all green):
+1. `repo init -m torizon-ab/tdx/release.xml` **and** `.../nightly.xml` flatten
+   cleanly with the 3 overlays merged (release pins `meta-toradex-torizon` to a
+   SHA; nightly floats it at branch tip).
+2. Fresh `repo init/sync` on m920x → full 20-layer tree, `SYNC_EXIT=0`, overlays
+   at pinned revs.
+3. **Caught a real bug:** `meta-rauc`/`meta-swupdate` `master` target the NEXT
+   series (wrynose) and a scarthgap core rejects them (LAYERSERIES_COMPAT). Pinned
+   both to the exact tested scarthgap revs (`meta-rauc d63878f`,
+   `meta-swupdate 7da41c5`). `meta-torizon-ab` tracks `main` (cd70b1b).
+4. `DISTRO=torizon-ab-rauc MACHINE=genericx86-64 bitbake torizon-minimal-ab
+   torizon-ab-bundle` → **BUILD_EXIT=0**, 7843 tasks all succeeded, artifacts
+   deployed: `torizon-ab-bundle-genericx86-64.raucb` (794 MB) +
+   `torizon-minimal-ab-genericx86-64.wic` (13 GB apparent, sparse + `.bmap`).
+   Reused the shared sstate/downloads via a new `bb-ab.sh` helper on m920x.
+5. **SWUpdate variant too:** `DISTRO=torizon-ab bitbake torizon-minimal-ab
+   torizon-ab-swu` → **BUILD_EXIT=0** (7847 tasks, 7554 sstate-reused → fast),
+   artifact `torizon-ab-swu-genericx86-64.rootfs.swu` (792 MB). Both backends now
+   build through the single manifest on x86 (`bb-ab.sh` takes `BUILD_DIR` to keep
+   the two variants' TMPDIRs separate).
+6. **ARM too — verdin-am62p RAUC:** `DISTRO=torizon-ab-rauc MACHINE=verdin-am62p
+   bitbake torizon-minimal-ab torizon-ab-bundle` → **BUILD_EXIT=0** (9717 tasks,
+   4982 sstate-reused), no errors. TI redirects deploy to `deploy-ti/` and builds
+   the R5 SPL in a `tmp-k3r5` multiconfig (automatic via the machine include).
+   Artifacts: `torizon-ab-bundle-verdin-am62p.raucb` (165 MB) +
+   `tiboot3-am62px-hs-fs-verdin.bin`/`tispl.bin`/`u-boot.img` (K3 two-stage boot) +
+   `.wic`/`.ext4`(.gz). **Manifest proven across 2 arch × both backends.**
+
+**Note for publishing:** the raw `.wic` is 13 GB apparent (mostly-empty A/B slots
++ data; see B3 sizing) — publish it **compressed** (`.wic.gz`/`.xz`/`.zst`, tiny
+for a sparse image) so it fits GitHub Releases' 2 GiB cap; the `.raucb` (794 MB)
+already fits. **Remaining before public release:** pin `meta-torizon-ab` to a
+tag/SHA for the release channel; add the Tezi image target (`teziimg`, roadmap B2
+Phase 2) for the flashing feed; then the on-ramp README + push to GitHub.
+(SWUpdate x86 ✅, verdin-am62p RAUC ✅ — arch/backend coverage proven.)
+
+**AC:** from a clean checkout, `repo init -u <manifest> -b <branch> -m
+torizon-ab/tdx/release.xml && repo sync` then `. setup-environment build &&
+bitbake torizon-ab-swu` produce the image + `.swu` with no manual layer/DISTRO
+edits; revisions pinned for reproducibility; steps captured in the README.
 
 ### B2 — Multi-machine: `verdin-imx8mp` (U-Boot) + generalization (In progress)
 Branch: `multi-machine-imx8mp`. Abstract the bootloader/rollback/partition layer
@@ -308,6 +359,83 @@ affects the SWUpdate variant too. Diagnosis in
 [rauc-decisions.md](./rauc-decisions.md) (Open items) + a sequence diagram.
 **AC:** after a cloud A→B update the device is on the new slot **and** Torizon
 Cloud shows it installed/succeeded; correct across a power cut at any point.
+
+### B14 — Backend-specific secondary HWID (compatibility contract) (priority: TBD)
+The OS-rootfs secondary registers the **same** `ecu_hardware_id`
+(`<machine>-rootfs`) for **both** backends
+([aktualizr-default-sec.bbappend:55](../recipes-sota/config/aktualizr-default-sec.bbappend#L55),
+in the shared `do_install:append:torizon-ab`). The HWID is Uptane's primary
+compatibility axis (what the cloud uses to decide whether a target may be offered
+to an ECU), so a RAUC device and a SWUpdate device of the **same machine** are
+indistinguishable to the cloud — a `.swu` can be launched at a RAUC device and
+vice-versa. It fails *safe* today (the wrong-format payload is rejected by
+`rauc install` / `swupdate -i`, slots untouched, and each backend also has its own
+compatible string — RAUC `torizon-ab-rauc-<machine>` vs `system.conf`, SWUpdate
+`hardware-compatibility` in `sw-description`), so it's **not** a brick risk. But
+the failure is *late and confusing* (download → try → fail) instead of *early and
+clean* (cloud never offers an incompatible target), and it breaks **fleet
+targeting** the moment there is a same-machine mixed fleet — which is exactly the
+**M3 delegation** scenario (a campaign selects on HWID; half a mixed fleet would
+fail).
+
+**Decision:** encode the backend in the HWID → `<machine>-rootfs-rauc` /
+`<machine>-rootfs-swupdate` (keep `-rootfs` as the stable stem; match the
+`DISTROOVERRIDE` backend tokens). Fix is one line + two vars:
+`TORIZON_AB_ECU_SUFFIX:torizon-ab-{swupdate,rauc}` appended at :55.
+- **Variant stays OUT of the HWID** — minimal/docker of the same machine+backend
+  are interchangeable rootfs payloads; cross-variant *slot-size* fit is a sizing
+  concern (B3), not a compatibility key.
+- **Breaking change** for already-provisioned devices (HWID is baked into
+  `secondaries.json` + cloud registration at provision time) — pre-1.0, re-register
+  or reflash. Do it **before** the build/publish pipeline and any third-party
+  fleet bake in `<machine>-rootfs`.
+- Touches: the bbappend, CLAUDE.md invariant, and every doc that names
+  `<machine>-rootfs` (rauc-cloud-test, updates-and-rollback, architecture,
+  rauc-decisions, README, build-publish-pipeline) + the pipeline's upload
+  `hardwareId`.
+
+**AC:** a RAUC device registers `<machine>-rootfs-rauc` and a SWUpdate device
+`<machine>-rootfs-swupdate`; the cloud will not offer a `.raucb` to a SWUpdate ECU
+or a `.swu` to a RAUC ECU (target filtered by HWID, no download attempted); a
+same-machine mixed fleet is independently targetable; docs + pipeline updated to
+the new scheme.
+
+### B15 — Wire the SWUpdate backend for verdin-am62p (K3) (priority: TBD)
+Discovered while shaking out the build-publish matrix (2026-08-27): a
+`DISTRO=torizon-ab MACHINE=verdin-am62p` build fails to parse —
+`Nothing RPROVIDES 'torizon-ab-bootenv'`. The am62p SWUpdate combo was never
+wired: `recipes-images/images/torizon-ab-base.inc` installs the bootenv provider
+for SWUpdate via **machine-specific** overrides
+(`:torizon-ab-swupdate:genericx86-64` → grub-ab, `:torizon-ab-swupdate:verdin-imx8mp`
+→ uboot-ab) and no `verdin-am62p`/`:k3` line exists — whereas RAUC already uses
+SoC-family overrides (`:torizon-ab-rauc:k3` → rauc-uboot-ab), which is why
+am62p-RAUC builds. Bring-up (mirror the imx8mp SWUpdate wiring for K3, likely with
+HW validation — the `uboot-ab` boot.scr/bootenv.sh path was only proven on imx8mp):
+- `CORE_IMAGE_BASE_INSTALL:append:torizon-ab-swupdate:k3 = " uboot-ab"` (prefer the
+  `:k3`/`:mx8mp-generic-bsp` SoC-family form over machine-specific, matching RAUC).
+- `IMAGE_BOOT_FILES:torizon-ab-swupdate:k3 = "uboot-ab-boot.scr;boot.scr"`.
+- the `do_image_wic[depends]` uboot-ab deploy dep for am62p.
+- verify `uboot-ab` (SWUpdate U-Boot backend) has no imx8mp-isms on K3.
+**Build-level DONE (2026-08-27, branch `fix/am62p-swupdate-build` commit
+`a731236`):** fixed 3 gaps — `torizon-ab-base.inc` (uboot-ab install + boot.scr +
+wic dep for `:k3`), `torizon-ab.conf` (`WKS_FILE`/`IMAGE_FSTYPES` for `:k3`),
+`uboot-ab_1.0.bb` (`COMPATIBLE_MACHINE` += verdin-am62p). `MACHINE=verdin-am62p
+DISTRO=torizon-ab bitbake torizon-minimal-ab torizon-ab-swu` now builds green on
+m920x → `torizon-ab-swu-verdin-am62p.rootfs.swu` (164 MB) + `.wic` (4.2 GB).
+**HW boot VALIDATED (2026-08-28):** flashed the am62p-SWUpdate A/B image to the
+real Verdin AM62p via a Tezi feed (raw .wic.zst, autoinstall) and it booted clean —
+serial: `U-Boot 2024.04-ti` → `A/B: booting slot partition rootfs_a` (the uboot-ab
+A/B script — the exact B15 wiring) → `root=LABEL=otaroot_a` → greenboot → login.
+This retires the B15 risk (whether uboot-ab boots the A/B layout on K3). The
+SWUpdate *apply* is unchanged from the imx8mp-proven, machine-agnostic handler, so
+a live am62p A→B is confirmatory and will ride in with M2 (cloud OTA per build).
+**Remaining:** merge the branch to main (user; my token can't push meta-torizon-ab),
+then am62p-swupdate re-enters the matrix.
+
+**AC:** `MACHINE=verdin-am62p DISTRO=torizon-ab bitbake torizon-minimal-ab
+torizon-ab-swu` builds ✅; boots slot A on real AM62p; a local + cloud SWUpdate A→B
+applies and rolls back. Until HW-proven, am62p-swupdate is excluded from the
+build-publish weekly matrix.
 
 ---
 
