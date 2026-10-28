@@ -143,7 +143,11 @@ the Torizon Cloud console. Then, entirely via API:
   per-device status via `GET /updates/devices/{uuid}`). `PATCH /updates/{id}`
   cancels while still *Pending*.
 - Force an immediate check instead of waiting for the 300 s poll:
-  `systemctl restart aktualizr-torizon` on the device.
+  `systemctl restart aktualizr-torizon` on the device — but only **before**
+  aktualizr has started on the launched update. Restarting it mid-fetch aborts
+  the update and the cloud records it as failed (`resultCode 101`, *"Update was
+  aborted on the client"*; device `curl error 42`), seen on Torizon OS 8. When in
+  doubt, launch and let the poll pick it up.
 - **Status:** `GET /updates/devices/{uuid}` (→ `Completed`), `GET /devices?deviceUuid=…`
   (→ `UpToDate`). App-API list responses use a `{"values":[…]}` envelope.
 
@@ -214,6 +218,25 @@ on Secondary rootfs → has been installed → No pending update for Primary"* �
 reproduce** here either (same slow-reboot reasoning as RAUC). This confirms the
 aktualizr seam and the cloud path are backend-agnostic: RAUC and SWUpdate take the
 identical provision/upload/launch/report flow, differing only below the handler.
+
+## Also verified — Torizon OS 8 (wrynose), SWUpdate, Verdin iMX8MP (2026-10-28)
+
+Same API-driven method on the Torizon OS 8 port (integration channel), fresh device
+provisioned with `POST /devices` (the broad API client is allowed to create devices
+too), credentials into `/var/sota/import/`:
+
+- **Good update** (`.swu` 187 MB, `POST /packages` in ~25 s) → download 100% →
+  primary inert → `verdin-imx8mp-rootfs` secondary ran `swupdate_actions.sh` → slot B
+  → reboot → aktualizr reconciled *"pending update … has been installed"* → cloud
+  **Completed**, device **UpToDate**.
+- **Bad update** (image built with `torizon-ab-rollback-test`: a failing greenboot
+  required check) → written to slot A → 3 failed boots → `Bootlimit (3) exceeded` →
+  altbootcmd → back on slot B → cloud **`success: false`**, `resultCode
+  verdin-imx8mp-rootfs:INSTALL_FAILED`, *"rootfs update failed; rolled back"* (the
+  handler's own `complete-install` message), device status `Error`.
+- After the rollback the device reports the good package as installed: re-launching
+  it is refused (`400 installed_target_is_update`).
+- The startup `curl error 58` burst (see the AM62p notes) reproduces on 8; harmless.
 
 ## Notes / gotchas
 
