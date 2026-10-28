@@ -183,14 +183,16 @@ and [rauc-decisions.md](./rauc-decisions.md) for the design rationale.
 
 Found and fixed on real hardware during the Torizon OS 8 port (Verdin iMX8MP):
 
-- **complete-install waits for greenboot.** A failed greenboot health check does
-  not stop `boot-complete.target`, so aktualizr also starts on an unhealthy trial
-  boot. Both handlers therefore answer `need-completion` while the running slot is
-  the trial target and `greenboot-healthcheck.service` failed: the trial stays
-  armed, greenboot reboots, the slot runs out of attempts, and the next
-  `complete-install` (on the old slot) reports *failed: rolled back*. Before, a
-  broken update could be reported as successful (always on RAUC; on SWUpdate only
-  when aktualizr beat greenboot's reboot).
+- **complete-install waits for greenboot.** Both handlers answer
+  `need-completion` while the running slot is the trial target and
+  `greenboot-healthcheck.service` failed: the trial stays armed, greenboot
+  reboots, the slot runs out of attempts, and the next `complete-install` (on the
+  old slot) reports *failed: rolled back*. Normally aktualizr does not even start
+  on a failed boot (the health check is `RequiredBy=boot-complete.target`, which
+  aktualizr requires) — verified on the SWUpdate image. Yet on the RAUC image,
+  before the fixes, aktualizr did run on the failed trial boot and confirmed it,
+  so the cloud got *success* for a broken update; why it started there is not
+  understood yet (open). The handler check makes completion safe either way.
 - **RAUC on U-Boot sets `upgrade_available` too.** greenboot's red path
   (`redboot-auto-reboot`) only reboots when `upgrade_available=1`, so a failed RAUC
   trial was never retried and never rolled back. `rauc_actions.sh` now sets it (and
