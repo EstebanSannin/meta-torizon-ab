@@ -89,9 +89,14 @@ set_update_in_progress() {
     has_uboot_env || return 0
     maybe_run fw_setenv upgrade_available "$1"
     maybe_run fw_setenv bootcount 0
-    # A new trial clears the previous rollback flag (as stock aktualizr does).
     if [ "$1" = "1" ]; then
+        # A new trial clears the previous rollback flag (as stock aktualizr does).
         maybe_run fw_setenv rollback 0
+        # Past bootlimit U-Boot runs altbootcmd. The boot script seeds it too, but
+        # it lives in the FAT boot partition, which rootfs updates never rewrite,
+        # so make sure here that a device running an older boot script has it.
+        fw_printenv altbootcmd >/dev/null 2>&1 \
+            || maybe_run fw_setenv altbootcmd "'setenv rollback 1; run bootcmd'"
     fi
 }
 
