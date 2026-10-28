@@ -8,6 +8,8 @@ ConditionPathExists=/etc/fw_env.config
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# This early in boot udev may not have created the env device yet.
+ExecStartPre=/usr/libexec/torizon-ab/wait-ubootenv
 ExecStart=/usr/bin/rauc-ubootenv-create.sh
 
 [Install]

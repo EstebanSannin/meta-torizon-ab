@@ -3,8 +3,9 @@ DESCRIPTION = "greenboot runs its green.d/red.d scripts at boot-complete.target,
 which can come before udev has created the U-Boot env device named in \
 /etc/fw_env.config (e.g. /dev/emmc-boot0). libubootenv then fails and the boot \
 bookkeeping (bootcount reset, trial confirmation) is silently lost. This adds a \
-drop-in to both greenboot task runners that waits for that device first. Shared \
-by both U-Boot backends (uboot-ab, rauc-uboot-ab); no per-machine data."
+drop-in to both greenboot task runners that waits for that device first; \
+rauc-uboot-ab's env seeding unit uses the same wait. Shared by both U-Boot \
+backends (uboot-ab, rauc-uboot-ab); no per-machine data."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 
