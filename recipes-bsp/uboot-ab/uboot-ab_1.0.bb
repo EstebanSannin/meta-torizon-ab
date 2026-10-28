@@ -20,7 +20,7 @@ COMPATIBLE_MACHINE = "verdin-am62p|verdin-imx8mp"
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 
 # fw_setenv/fw_printenv (real U-Boot env) at runtime; greenboot hooks.
-RDEPENDS:${PN} = "libubootenv-bin greenboot"
+RDEPENDS:${PN} = "libubootenv-bin greenboot torizon-ab-ubootenv-wait"
 
 # The action handler (aktualizr-default-sec) sources /usr/lib/torizon-ab/bootenv.sh.
 RPROVIDES:${PN} += "torizon-ab-bootenv"

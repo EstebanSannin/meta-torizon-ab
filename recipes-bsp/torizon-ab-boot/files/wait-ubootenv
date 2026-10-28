@@ -1,0 +1,17 @@
+#!/bin/sh
+# Wait until udev has set up the U-Boot env device(s) named in /etc/fw_env.config.
+#
+# greenboot runs its green.d/red.d scripts at boot-complete.target, which can come
+# before udev has created the env device symlink (e.g. /dev/emmc-boot0). libubootenv
+# then fails with "Cannot initialize environment" and the boot bookkeeping (reset
+# bootcount, confirm a trial) is silently lost, so a healthy update keeps counting
+# boot attempts until it is rolled back. Run as ExecStartPre of the task runners.
+cfg=/etc/fw_env.config
+[ -r "$cfg" ] || exit 0
+
+devs=$(awk '!/^[[:space:]]*(#|$)/ { print $1 }' "$cfg" | sort -u)
+[ -n "$devs" ] || exit 0
+
+# shellcheck disable=SC2086 # one argument per device
+udevadm wait --timeout=30 $devs || echo "wait-ubootenv: U-Boot env device not ready: $devs" >&2
+exit 0

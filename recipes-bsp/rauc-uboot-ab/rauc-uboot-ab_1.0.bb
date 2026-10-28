@@ -22,7 +22,7 @@ COMPATIBLE_MACHINE = "verdin-am62p|verdin-imx8mp"
 PACKAGE_ARCH = "${MACHINE_ARCH}"
 
 # fw_setenv/fw_printenv (real U-Boot env) at runtime; rauc for mark-good; greenboot.
-RDEPENDS:${PN} = "libubootenv-bin rauc greenboot bash"
+RDEPENDS:${PN} = "libubootenv-bin rauc greenboot bash torizon-ab-ubootenv-wait"
 
 SYSTEMD_SERVICE:${PN} = "rauc-ubootenv-create.service"
 

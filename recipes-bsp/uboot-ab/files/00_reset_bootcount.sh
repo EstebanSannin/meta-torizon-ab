@@ -4,6 +4,8 @@
 # complete-install clears 'upgrade_available'. Uses the real U-Boot env.
 set -eu
 
+# No '|| true': a failed write must show up as a failed green script, not be
+# reported as SUCCESS while the bootcount keeps counting towards a rollback.
 if command -v fw_setenv >/dev/null 2>&1; then
-    fw_setenv bootcount 0 || true
+    fw_setenv bootcount 0
 fi
