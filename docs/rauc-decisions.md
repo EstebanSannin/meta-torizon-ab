@@ -101,12 +101,12 @@ The kernel resolves `root=PARTLABEL=` via the stock OE initramfs
   to casync/delta updates later.
 - RAUC **requires signed bundles**. A development X.509 key/cert signs the bundle
   (`RAUC_KEY_FILE`/`RAUC_CERT_FILE`) and the self-signed cert is the on-device
-  `/etc/rauc/keyring.pem`. This subsumes the SWUpdate variant's optional-signing
+  `/usr/lib/rauc/keyring.pem`. This subsumes the SWUpdate variant's optional-signing
   follow-up — **production key management is the remaining hardening item**
   (the in-tree dev keys are NOT for production).
 
 RAUC's system config is delivered through meta-rauc's `virtual-rauc-conf`
-provider: a `rauc-conf.bbappend` writes the templated `/etc/rauc/system.conf`
+provider: a `rauc-conf.bbappend` writes the templated `/usr/lib/rauc/system.conf`
 (compatible string + PARTLABEL slot devices, `bootloader=grub`, ESP grubenv) and
 installs the dev keyring. (Putting `system.conf` in the `rauc` package instead
 file-conflicts with `rauc-conf`.)

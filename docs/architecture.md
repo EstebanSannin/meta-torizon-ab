@@ -178,7 +178,7 @@ SWUpdate backend
   recipes-bsp/uboot-ab/*                       U-Boot A/B boot script + env (imx8mp)
 
 RAUC backend
-  recipes-support/rauc/rauc-conf.bbappend      /etc/rauc/system.conf (PARTLABEL slots) + dev keyring
+  recipes-support/rauc/rauc-conf.bbappend      /usr/lib/rauc/system.conf (PARTLABEL slots) + dev keyring
   recipes-support/rauc/files/keyring.pem       dev verification keyring (NOT for production)
   recipes-sota/config/files/rauc_actions.sh    the A/B action handler (rauc install)
   recipes-images/bundle/*                      signed .raucb producer (+ in-tree dev signing keys)

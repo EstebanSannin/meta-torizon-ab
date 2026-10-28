@@ -13,7 +13,7 @@
 #
 # Payload: a signed RAUC bundle (.raucb) whose manifest maps the rootfs image to
 # the 'rootfs' slot class. `rauc install` writes the INACTIVE slot, verifies the
-# bundle signature against /etc/rauc/keyring.pem, and (via RAUC's grub bootloader
+# bundle signature against the keyring in /usr/lib/rauc, and (via RAUC's grub bootloader
 # backend) arms that slot to boot next on trial. The running slot is read from
 # the 'rauc.slot=A|B' kernel argument set by our grub.cfg.
 

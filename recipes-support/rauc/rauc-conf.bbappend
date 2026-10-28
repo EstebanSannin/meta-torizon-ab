@@ -23,6 +23,9 @@ RAUC_SYSTEM_BOOTLOADER:mx8mp-generic-bsp = "uboot"
 # The base recipe installs the example system.conf; overwrite it with ours.
 # The [system] bootloader line differs by backend; the grubenv path is emitted
 # only for the grub backend (the uboot backend locates its env via fw_env.config).
+# Like the keyring, it lives in ${nonarch_libdir}/rauc (where meta-rauc installs
+# them and RAUC looks after /etc/rauc and /run/rauc), i.e. inside each rootfs slot,
+# so it is updated together with the slot; /etc/rauc stays free for local overrides.
 do_install:append:torizon-ab-rauc () {
     {
         echo "[system]"
@@ -36,7 +39,7 @@ do_install:append:torizon-ab-rauc () {
         echo "# kernel command line (see the machine's boot config)."
         echo ""
         echo "[keyring]"
-        echo "path=/etc/rauc/keyring.pem"
+        echo "path=${nonarch_libdir}/rauc/${RAUC_KEYRING_FILE}"
         echo ""
         echo "[slot.rootfs.0]"
         echo "device=/dev/disk/by-partlabel/${TORIZON_AB_PARTLABEL_A}"
@@ -47,5 +50,5 @@ do_install:append:torizon-ab-rauc () {
         echo "device=/dev/disk/by-partlabel/${TORIZON_AB_PARTLABEL_B}"
         echo "type=ext4"
         echo "bootname=B"
-    } > ${D}${sysconfdir}/rauc/system.conf
+    } > ${D}${nonarch_libdir}/rauc/system.conf
 }

@@ -83,7 +83,7 @@ Expected sequence:
    `/var/sota/storage/rootfs/rootfs.raucb`, then calls `rauc_actions.sh install`.
 2. The handler unmounts any auto-mounted inactive slot and runs `rauc install`,
    which writes the inactive slot, verifies the bundle signature against
-   `/etc/rauc/keyring.pem`, and arms the bootloader (grubenv `ORDER`).
+   `/usr/lib/rauc/keyring.pem`, and arms the bootloader (grubenv `ORDER`).
 3. `/run/need-reboot` → `torizon-ab-pending-reboot` reboots.
 4. GRUB boots the freshly-installed slot (`rauc.slot=B`, `root=PARTLABEL=rootfs_b`).
 5. greenboot health check passes → `rauc status mark-good`.
@@ -240,7 +240,7 @@ too), credentials into `/var/sota/import/`:
 
 ## Notes / gotchas
 
-- The bundle is **plain**-format and **dev-signed** (`/etc/rauc/keyring.pem` is a
+- The bundle is **plain**-format and **dev-signed** (`/usr/lib/rauc/keyring.pem` is a
   development cert — NOT for production).
 - The target kernel must have `CONFIG_SQUASHFS` (RAUC mounts the bundle squashfs
   on-target); provided by `recipes-kernel/linux/linux-yocto_%.bbappend`.
