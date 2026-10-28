@@ -13,9 +13,10 @@
 #
 # Payload: a signed RAUC bundle (.raucb) whose manifest maps the rootfs image to
 # the 'rootfs' slot class. `rauc install` writes the INACTIVE slot, verifies the
-# bundle signature against the keyring in /usr/lib/rauc, and (via RAUC's grub bootloader
-# backend) arms that slot to boot next on trial. The running slot is read from
-# the 'rauc.slot=A|B' kernel argument set by our grub.cfg.
+# bundle signature against the keyring in /usr/lib/rauc, and (via RAUC's bootloader
+# backend: grub on x86, U-Boot on ARM) arms that slot to boot next on trial. The
+# running slot is read from the 'rauc.slot=A|B' kernel argument set by the boot
+# configuration.
 
 shopt -s expand_aliases
 source "/usr/bin/common_actions.sh"
@@ -66,6 +67,30 @@ other_bootname() {
     die "Bad bootname '$1'"
 }
 
+# --- Trial state helpers -----------------------------------------------------
+
+# greenboot is the health authority: confirm only a boot it declared healthy.
+# Its health check runs before boot-complete.target and aktualizr only after it,
+# so the result is final when complete-install runs.
+boot_is_unhealthy() {
+    systemctl is-failed --quiet greenboot-healthcheck.service
+}
+
+# U-Boot machines: mirror the trial in 'upgrade_available', the flag greenboot's
+# red path (redboot-auto-reboot) and Torizon's U-Boot env cleanup read to tell an
+# update is in progress; RAUC's BOOT_ORDER/BOOT_<slot>_LEFT still choose the
+# slot. Without it a failed trial boot is never retried, so never rolled back.
+has_uboot_env() {
+    [ -r /etc/fw_env.config ] && command -v fw_setenv >/dev/null 2>&1
+}
+
+# $1: 1 when a trial is armed, 0 once it is resolved
+set_update_in_progress() {
+    has_uboot_env || return 0
+    maybe_run fw_setenv upgrade_available "$1"
+    maybe_run fw_setenv bootcount 0
+}
+
 # --- Actions -----------------------------------------------------------------
 
 do_get_firmware_info() {
@@ -108,6 +133,7 @@ do_install() {
     # the bootloader to boot it next on trial.
     maybe_run RAUC install "$SECONDARY_FIRMWARE_PATH" \
         || die "rauc install failed"
+    set_update_in_progress 1
 
     # Record the intended boot target for complete-install.
     install -d "${LOG_DIR}"
@@ -139,7 +165,17 @@ do_complete_install() {
         exit 64   # nothing pending
     fi
 
+    # Booted into the trial slot but greenboot failed it: keep the trial armed.
+    # greenboot reboots, the slot runs out of attempts, the old slot comes back,
+    # and the next complete-install reports the rollback.
+    if [ "$booted" = "$target" ] && boot_is_unhealthy; then
+        log "Trial slot $target is unhealthy (greenboot); waiting for the rollback"
+        echo '{"status": "need-completion", "message": "trial boot unhealthy; waiting for rollback"}'
+        return 0
+    fi
+
     rm -f "${TARGET_STATE}"
+    set_update_in_progress 0
 
     if [ "$booted" = "$target" ]; then
         # We booted the freshly-installed slot. greenboot's health check marks

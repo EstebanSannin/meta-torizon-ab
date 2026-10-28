@@ -164,6 +164,17 @@ do_complete_install() {
         exit 64   # nothing pending
     fi
 
+    # Booted into the trial slot but greenboot failed it: keep the trial armed.
+    # greenboot reboots, the trial runs out of attempts, the old slot comes back,
+    # and the next complete-install reports the rollback. (Its health check runs
+    # before boot-complete.target and aktualizr only after it, so the result is
+    # final here.)
+    if [ "$active" = "$target" ] && systemctl is-failed --quiet greenboot-healthcheck.service; then
+        log "Trial slot $target is unhealthy (greenboot); waiting for the rollback"
+        echo '{"status": "need-completion", "message": "trial boot unhealthy; waiting for rollback"}'
+        return 0
+    fi
+
     bootenv_confirm   # clear the trial state either way
 
     if [ "$active" = "$target" ]; then
