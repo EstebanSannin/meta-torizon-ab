@@ -95,7 +95,8 @@ set_update_in_progress() {
         # Past bootlimit U-Boot runs altbootcmd. The boot script seeds it too, but
         # it lives in the FAT boot partition, which rootfs updates never rewrite,
         # so make sure here that a device running an older boot script has it.
-        fw_printenv altbootcmd >/dev/null 2>&1 \
+        # (fw_printenv exits 0 even for an unset variable: test the value.)
+        [ -n "$(fw_printenv -n altbootcmd 2>/dev/null)" ] \
             || maybe_run fw_setenv altbootcmd "'setenv rollback 1; run bootcmd'"
     fi
 }
