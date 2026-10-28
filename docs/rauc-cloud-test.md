@@ -238,6 +238,18 @@ too), credentials into `/var/sota/import/`:
   it is refused (`400 installed_target_is_update`).
 - The startup `curl error 58` burst (see the AM62p notes) reproduces on 8; harmless.
 
+**RAUC, same board and method** (device re-provisioned after reflashing):
+good bundle → **Completed / UpToDate**, both slots good. The first bad-bundle run
+exposed that RAUC never rolled back and the cloud got **success** for the broken
+update (see *Health-gated confirmation* in
+[updates-and-rollback.md](./updates-and-rollback.md)). After the fixes: bad bundle
+→ 3 failed boots → `Bootlimit (3) exceeded` → altbootcmd → old slot → cloud
+**`success: false`, "rootfs update failed; rolled back"**, on a board still running
+an older `boot.scr` (the handler supplied `altbootcmd`) and again after a fresh flash.
+
+The `.swu` and `.raucb` packages share the hardware id `<machine>-rootfs`, so the
+cloud will offer a `.swu` to a RAUC device and vice versa (roadmap B14).
+
 ## Notes / gotchas
 
 - The bundle is **plain**-format and **dev-signed** (`/usr/lib/rauc/keyring.pem` is a

@@ -179,6 +179,34 @@ greenboot remains the health authority; its green.d hook calls
 See [rauc-cloud-test.md](./rauc-cloud-test.md) for the full cloud test runbook
 and [rauc-decisions.md](./rauc-decisions.md) for the design rationale.
 
+### Health-gated confirmation and the U-Boot trial flag (both backends)
+
+Found and fixed on real hardware during the Torizon OS 8 port (Verdin iMX8MP):
+
+- **complete-install waits for greenboot.** A failed greenboot health check does
+  not stop `boot-complete.target`, so aktualizr also starts on an unhealthy trial
+  boot. Both handlers therefore answer `need-completion` while the running slot is
+  the trial target and `greenboot-healthcheck.service` failed: the trial stays
+  armed, greenboot reboots, the slot runs out of attempts, and the next
+  `complete-install` (on the old slot) reports *failed: rolled back*. Before, a
+  broken update could be reported as successful (always on RAUC; on SWUpdate only
+  when aktualizr beat greenboot's reboot).
+- **RAUC on U-Boot sets `upgrade_available` too.** greenboot's red path
+  (`redboot-auto-reboot`) only reboots when `upgrade_available=1`, so a failed RAUC
+  trial was never retried and never rolled back. `rauc_actions.sh` now sets it (and
+  resets `bootcount`, clears `rollback`) when arming and clears it once the trial
+  resolves. `BOOT_ORDER`/`BOOT_<slot>_LEFT` still choose the slot.
+- **`altbootcmd` must exist.** With `upgrade_available=1` U-Boot counts boots and,
+  past `bootlimit`, runs `altbootcmd` instead of `bootcmd`; without it the board
+  stops at the U-Boot prompt. Both boot scripts seed it (`setenv rollback 1; run
+  bootcmd`), and the RAUC handler adds it when arming a trial, because **`boot.scr`
+  lives in the FAT boot partition, which rootfs updates never rewrite**: a field
+  device keeps the boot script it was flashed with.
+- **`fw_printenv NAME` exits 0 and prints `NAME=` for an unset variable**
+  (libubootenv), so check values (`fw_printenv -n NAME`), never the exit code.
+- Open: on x86 the RAUC variant has no `fw_printenv`/`fw_setenv`, so greenboot's
+  red path cannot tell an update is in progress there either.
+
 ### Testing rollback and manual slot switch (RAUC)
 
 Inspect state with `rauc status` (booted slot, each slot's good/bad flag, and
