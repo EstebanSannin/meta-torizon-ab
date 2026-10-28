@@ -1,8 +1,12 @@
 # Base include for Torizon OS A/B (no-OSTree) images.
 #
-# Derived from meta-toradex-torizon's torizon-base.inc, with all OSTree/SOTA-
-# feature couplings removed and the update stack that would normally be pulled
-# in by ':sota' re-added explicitly.
+# Derived from meta-torizon's torizon-base.inc (Torizon OS 8), with all OSTree/
+# SOTA-feature couplings removed and the update stack that would normally be
+# pulled in by ':sota' re-added explicitly.
+#
+# Machine-specific rootfs content (Toradex base packages, GPU/firmware kernel
+# modules, ...) is NOT listed here: meta-torizon-bsp's torizon-image-machine
+# class adds it to every image via IMAGE_CLASSES, ours included.
 
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
@@ -42,7 +46,8 @@ ROOTFS_POSTPROCESS_COMMAND += "install_initramfs_to_boot;"
 
 # ---------------------------------------------------------------------------
 # Base packages (mirrors torizon-base.inc, minus OSTree-only items:
-# ostree-customize-plymouth, ostree-devicetree-overlays, resize-helper).
+# ostree-devicetree-overlays, resize-helper). Also without kernel-devsrc: the
+# kernel source tree does not fit next to the rootfs in a fixed-size A/B slot.
 # ---------------------------------------------------------------------------
 CORE_IMAGE_BASE_INSTALL:append = " \
     cpupower \
@@ -61,7 +66,6 @@ CORE_IMAGE_BASE_INSTALL:append = " \
     less \
     libpwquality \
     mmc-utils \
-    nano \
     networkmanager \
     openssh-sftp-server \
     packagegroup-core-full-cmdline-multiuser \
@@ -80,13 +84,13 @@ CORE_IMAGE_BASE_INSTALL:append = " \
     zram \
 "
 
-CORE_IMAGE_BASE_INSTALL:append:tdx = " \
-    apparmor \
-    alsa-ucm-conf-tdx \
-    set-hostname \
-    tdx-info \
-    udev-toradex-rules \
+# Packages normally installed via RRECOMMENDS that should be dropped to avoid
+# the presence of GPLv3 software in Torizon OS images (as torizon-base.inc).
+BAD_RECOMMENDATIONS_GPL_V3 = " \
+    gpgme-tool \
+    dosfstools \
 "
+BAD_RECOMMENDATIONS += "${BAD_RECOMMENDATIONS_GPL_V3}"
 
 # ---------------------------------------------------------------------------
 # Update stack. Without the 'sota' feature these are NOT auto-injected, so we
@@ -171,10 +175,6 @@ do_image_wic[depends] += "${@bb.utils.contains('TORIZON_AB_UPDATER', 'swupdate',
 # grubenv-create.service and competing rollback logic), so drop it. Harmless on
 # machines that never added it (e.g. genericx86-64).
 IMAGE_INSTALL:remove = "grub-ota-fallback"
-
-# Firmware/kernel-module packages that must live in the rootfs (per SoC).
-CORE_IMAGE_BASE_INSTALL:append:mx8-nxp-bsp   = " kernel-module-imx-gpu-viv"
-CORE_IMAGE_BASE_INSTALL:append:mx8mp-nxp-bsp = " kernel-module-isp-vvcam"
 
 # ---------------------------------------------------------------------------
 # /etc/os-release
