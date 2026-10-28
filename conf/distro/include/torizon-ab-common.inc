@@ -39,6 +39,12 @@ INITRAMFS_FSTYPES = "cpio.gz"
 # rootfs; persistent state lives on the data partition (mounted over /var).
 DISTRO_FEATURES:remove = "stateless-system"
 
+# meta-rauc warns unless DISTRO_FEATURES contains 'rauc'. That feature only turns
+# on meta-rauc's own busybox/curl/packagegroup-base/linux-yocto tweaks: the RAUC
+# variant adds what RAUC needs itself (squashfs fragments per kernel recipe), and
+# the SWUpdate variant does not use RAUC at all, so the warning is just noise.
+SKIP_META_RAUC_FEATURE_CHECK = "1"
+
 # ---------------------------------------------------------------------------
 # Image output. ext4.gz is the per-slot rootfs payload on all machines.
 # x86 (GRUB/EFI) also builds the flashable A/B wic (WKS_FILE set per backend).
