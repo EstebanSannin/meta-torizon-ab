@@ -16,8 +16,8 @@ RAUC_BUNDLE_COMPATIBLE = "${RAUC_COMPATIBLE}"
 RAUC_BUNDLE_VERSION    = "${DISTRO_VERSION}"
 RAUC_BUNDLE_FORMAT     = "plain"
 
-RAUC_KEY_FILE  = "${WORKDIR}/dev.key.pem"
-RAUC_CERT_FILE = "${WORKDIR}/dev.cert.pem"
+RAUC_KEY_FILE  = "${UNPACKDIR}/dev.key.pem"
+RAUC_CERT_FILE = "${UNPACKDIR}/dev.cert.pem"
 
 # One rootfs slot class; the payload is the image's raw ext4.
 RAUC_BUNDLE_SLOTS = "rootfs"

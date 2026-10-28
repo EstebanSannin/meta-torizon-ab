@@ -27,5 +27,5 @@ TORIZON_AB_FSTAB:intel-corei7-64 = "fstab-torizon-ab"
 SRC_URI:append:torizon-ab = " file://fstab-torizon-ab file://fstab-torizon-ab-noesp"
 
 do_install:append:torizon-ab () {
-    install -m 0644 ${WORKDIR}/${TORIZON_AB_FSTAB} ${D}${sysconfdir}/fstab
+    install -m 0644 ${UNPACKDIR}/${TORIZON_AB_FSTAB} ${D}${sysconfdir}/fstab
 }

@@ -17,10 +17,10 @@ SRC_URI = " \
 
 do_install() {
     install -d ${D}${sbindir}
-    install -m 0755 ${WORKDIR}/resize-data-helper ${D}${sbindir}/resize-data-helper
+    install -m 0755 ${UNPACKDIR}/resize-data-helper ${D}${sbindir}/resize-data-helper
 
     install -d ${D}${systemd_system_unitdir}
-    install -m 0644 ${WORKDIR}/resize-data-helper.service ${D}${systemd_system_unitdir}/resize-data-helper.service
+    install -m 0644 ${UNPACKDIR}/resize-data-helper.service ${D}${systemd_system_unitdir}/resize-data-helper.service
 }
 
 FILES:${PN} = " \

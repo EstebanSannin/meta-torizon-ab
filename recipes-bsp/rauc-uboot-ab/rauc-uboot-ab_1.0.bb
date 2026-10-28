@@ -44,13 +44,13 @@ do_install() {
     install -m 0644 ${WORKDIR}/boot.scr ${D}/boot/boot.scr
 
     install -d ${D}${bindir}
-    install -m 0755 ${WORKDIR}/rauc-ubootenv-create.sh ${D}${bindir}/rauc-ubootenv-create.sh
+    install -m 0755 ${UNPACKDIR}/rauc-ubootenv-create.sh ${D}${bindir}/rauc-ubootenv-create.sh
 
     install -d ${D}${systemd_unitdir}/system
-    install -m 0644 ${WORKDIR}/rauc-ubootenv-create.service ${D}${systemd_unitdir}/system/rauc-ubootenv-create.service
+    install -m 0644 ${UNPACKDIR}/rauc-ubootenv-create.service ${D}${systemd_unitdir}/system/rauc-ubootenv-create.service
 
     install -d ${D}${sysconfdir}/greenboot/green.d
-    install -m 0755 ${WORKDIR}/00_rauc_mark_good.sh ${D}${sysconfdir}/greenboot/green.d/00_rauc_mark_good.sh
+    install -m 0755 ${UNPACKDIR}/00_rauc_mark_good.sh ${D}${sysconfdir}/greenboot/green.d/00_rauc_mark_good.sh
 }
 
 FILES:${PN} = " \

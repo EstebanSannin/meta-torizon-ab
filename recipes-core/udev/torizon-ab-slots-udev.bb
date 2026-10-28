@@ -22,13 +22,13 @@ SYSTEMD_SERVICE:${PN} = "torizon-ab-slot-ignorelist.service"
 
 do_install() {
     install -d ${D}${bindir}
-    install -m 0755 ${WORKDIR}/torizon-ab-slot-ignorelist ${D}${bindir}/torizon-ab-slot-ignorelist
+    install -m 0755 ${UNPACKDIR}/torizon-ab-slot-ignorelist ${D}${bindir}/torizon-ab-slot-ignorelist
 
     install -d ${D}${systemd_system_unitdir}
-    install -m 0644 ${WORKDIR}/torizon-ab-slot-ignorelist.service ${D}${systemd_system_unitdir}/torizon-ab-slot-ignorelist.service
+    install -m 0644 ${UNPACKDIR}/torizon-ab-slot-ignorelist.service ${D}${systemd_system_unitdir}/torizon-ab-slot-ignorelist.service
 
     install -d ${D}${sysconfdir}/udev/rules.d
-    install -m 0644 ${WORKDIR}/99-torizon-ab-slots.rules ${D}${sysconfdir}/udev/rules.d/99-torizon-ab-slots.rules
+    install -m 0644 ${UNPACKDIR}/99-torizon-ab-slots.rules ${D}${sysconfdir}/udev/rules.d/99-torizon-ab-slots.rules
 }
 
 FILES:${PN} = " \

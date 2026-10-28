@@ -24,10 +24,10 @@ TORIZON_AB_FW_FILE:torizon-ab-rauc     = "rootfs.raucb"
 
 # Install the active backend's handler.
 do_install:append:torizon-ab-swupdate () {
-    install -m 0744 ${WORKDIR}/swupdate_actions.sh ${D}${bindir}/swupdate_actions.sh
+    install -m 0744 ${UNPACKDIR}/swupdate_actions.sh ${D}${bindir}/swupdate_actions.sh
 }
 do_install:append:torizon-ab-rauc () {
-    install -m 0744 ${WORKDIR}/rauc_actions.sh ${D}${bindir}/rauc_actions.sh
+    install -m 0744 ${UNPACKDIR}/rauc_actions.sh ${D}${bindir}/rauc_actions.sh
 }
 
 # Append the '<machine>-rootfs' subsystem secondary to the shared

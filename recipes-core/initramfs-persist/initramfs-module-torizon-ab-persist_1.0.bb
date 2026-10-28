@@ -21,7 +21,7 @@ inherit allarch
 do_install() {
     install -d ${D}/init.d
     # 92: after 90-rootfs (mounts the slot), before 99-finish (switch_root).
-    install -m 0755 ${WORKDIR}/persist ${D}/init.d/92-persist
+    install -m 0755 ${UNPACKDIR}/persist ${D}/init.d/92-persist
 }
 
 FILES:${PN} = "/init.d/92-persist"

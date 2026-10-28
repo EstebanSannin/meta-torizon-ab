@@ -17,8 +17,8 @@ SYSTEMD_SERVICE:${PN} = "torizon-ab-pending-reboot.path torizon-ab-pending-reboo
 
 do_install() {
     install -d ${D}${systemd_system_unitdir}
-    install -m 0644 ${WORKDIR}/torizon-ab-pending-reboot.path ${D}${systemd_system_unitdir}/torizon-ab-pending-reboot.path
-    install -m 0644 ${WORKDIR}/torizon-ab-pending-reboot.service ${D}${systemd_system_unitdir}/torizon-ab-pending-reboot.service
+    install -m 0644 ${UNPACKDIR}/torizon-ab-pending-reboot.path ${D}${systemd_system_unitdir}/torizon-ab-pending-reboot.path
+    install -m 0644 ${UNPACKDIR}/torizon-ab-pending-reboot.service ${D}${systemd_system_unitdir}/torizon-ab-pending-reboot.service
 }
 
 FILES:${PN} = " \

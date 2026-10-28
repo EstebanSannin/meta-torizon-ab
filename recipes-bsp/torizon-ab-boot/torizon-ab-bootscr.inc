@@ -44,7 +44,7 @@ do_compile() {
     if [ -z "${TORIZON_AB_FDTFILE}" ]; then
         bbfatal "torizon-ab boot: TORIZON_AB_FDTFILE unset for ${MACHINE}; set your carrier device-tree file (see docs/uboot-rauc-porting.md)."
     fi
-    cat ${WORKDIR}/${BOOT_PREAMBLE} ${WORKDIR}/boot-body.cmd > ${WORKDIR}/boot.cmd.full
+    cat ${UNPACKDIR}/${BOOT_PREAMBLE} ${UNPACKDIR}/boot-body.cmd > ${WORKDIR}/boot.cmd.full
     sed -e 's|@@KERNEL_IMAGETYPE@@|${KERNEL_IMAGETYPE}|g' \
         -e 's|@@KERNEL_DTB_PREFIX@@|${KERNEL_DTB_PREFIX}|g' \
         -e 's|@@KERNEL_BOOTCMD@@|${KERNEL_BOOTCMD}|g' \

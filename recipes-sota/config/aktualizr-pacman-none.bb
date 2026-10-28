@@ -17,5 +17,5 @@ PR = "1"
 
 do_install() {
     install -m 0700 -d ${D}${libdir}/sota/conf.d
-    install -m 0644 ${WORKDIR}/90-pacman.toml ${D}${libdir}/sota/conf.d/90-pacman.toml
+    install -m 0644 ${UNPACKDIR}/90-pacman.toml ${D}${libdir}/sota/conf.d/90-pacman.toml
 }

@@ -36,19 +36,19 @@ RREPLACES:${PN} = "u-boot-fw-utils"
 
 do_install() {
     install -d ${D}${bindir}
-    install -m 0755 ${WORKDIR}/grubenv-create.sh ${D}${bindir}/grubenv-create.sh
-    install -m 0755 ${WORKDIR}/fw_printenv ${D}${bindir}/fw_printenv
-    install -m 0755 ${WORKDIR}/fw_setenv ${D}${bindir}/fw_setenv
+    install -m 0755 ${UNPACKDIR}/grubenv-create.sh ${D}${bindir}/grubenv-create.sh
+    install -m 0755 ${UNPACKDIR}/fw_printenv ${D}${bindir}/fw_printenv
+    install -m 0755 ${UNPACKDIR}/fw_setenv ${D}${bindir}/fw_setenv
 
     install -d ${D}${systemd_unitdir}/system
-    install -m 0644 ${WORKDIR}/grubenv-create.service ${D}${systemd_unitdir}/system/grubenv-create.service
+    install -m 0644 ${UNPACKDIR}/grubenv-create.service ${D}${systemd_unitdir}/system/grubenv-create.service
 
     install -d ${D}${sysconfdir}/greenboot/green.d
-    install -m 0755 ${WORKDIR}/00_reset_bootcount.sh ${D}${sysconfdir}/greenboot/green.d/00_reset_bootcount.sh
+    install -m 0755 ${UNPACKDIR}/00_reset_bootcount.sh ${D}${sysconfdir}/greenboot/green.d/00_reset_bootcount.sh
 
     # Boot-env helper sourced by the rootfs action handler.
     install -d ${D}${libdir}/torizon-ab
-    install -m 0644 ${WORKDIR}/bootenv.sh ${D}${libdir}/torizon-ab/bootenv.sh
+    install -m 0644 ${UNPACKDIR}/bootenv.sh ${D}${libdir}/torizon-ab/bootenv.sh
 }
 
 FILES:${PN} = " \

@@ -38,10 +38,10 @@ do_install() {
     install -m 0644 ${WORKDIR}/boot.scr ${D}/boot/boot.scr
 
     install -d ${D}${libdir}/torizon-ab
-    install -m 0644 ${WORKDIR}/bootenv.sh ${D}${libdir}/torizon-ab/bootenv.sh
+    install -m 0644 ${UNPACKDIR}/bootenv.sh ${D}${libdir}/torizon-ab/bootenv.sh
 
     install -d ${D}${sysconfdir}/greenboot/green.d
-    install -m 0755 ${WORKDIR}/00_reset_bootcount.sh ${D}${sysconfdir}/greenboot/green.d/00_reset_bootcount.sh
+    install -m 0755 ${UNPACKDIR}/00_reset_bootcount.sh ${D}${sysconfdir}/greenboot/green.d/00_reset_bootcount.sh
 }
 
 FILES:${PN} = " \

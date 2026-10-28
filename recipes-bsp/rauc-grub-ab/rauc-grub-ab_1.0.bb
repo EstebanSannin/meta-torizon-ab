@@ -25,13 +25,13 @@ SYSTEMD_SERVICE:${PN} = "grubenv-create.service"
 
 do_install() {
     install -d ${D}${bindir}
-    install -m 0755 ${WORKDIR}/grubenv-create.sh ${D}${bindir}/rauc-grubenv-create.sh
+    install -m 0755 ${UNPACKDIR}/grubenv-create.sh ${D}${bindir}/rauc-grubenv-create.sh
 
     install -d ${D}${systemd_unitdir}/system
-    install -m 0644 ${WORKDIR}/grubenv-create.service ${D}${systemd_unitdir}/system/grubenv-create.service
+    install -m 0644 ${UNPACKDIR}/grubenv-create.service ${D}${systemd_unitdir}/system/grubenv-create.service
 
     install -d ${D}${sysconfdir}/greenboot/green.d
-    install -m 0755 ${WORKDIR}/00_rauc_mark_good.sh ${D}${sysconfdir}/greenboot/green.d/00_rauc_mark_good.sh
+    install -m 0755 ${UNPACKDIR}/00_rauc_mark_good.sh ${D}${sysconfdir}/greenboot/green.d/00_rauc_mark_good.sh
 }
 
 FILES:${PN} = " \

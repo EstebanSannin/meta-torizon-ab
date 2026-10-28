@@ -14,7 +14,7 @@ RDEPENDS:${PN} = "greenboot"
 
 do_install() {
     install -d ${D}${sysconfdir}/greenboot/check/required.d
-    install -m 0755 ${WORKDIR}/99-force-fail.sh ${D}${sysconfdir}/greenboot/check/required.d/99-force-fail.sh
+    install -m 0755 ${UNPACKDIR}/99-force-fail.sh ${D}${sysconfdir}/greenboot/check/required.d/99-force-fail.sh
 }
 
 FILES:${PN} = "${sysconfdir}/greenboot/check/required.d/99-force-fail.sh"
