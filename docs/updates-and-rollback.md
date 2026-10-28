@@ -187,12 +187,14 @@ Found and fixed on real hardware during the Torizon OS 8 port (Verdin iMX8MP):
   `need-completion` while the running slot is the trial target and
   `greenboot-healthcheck.service` failed: the trial stays armed, greenboot
   reboots, the slot runs out of attempts, and the next `complete-install` (on the
-  old slot) reports *failed: rolled back*. Normally aktualizr does not even start
-  on a failed boot (the health check is `RequiredBy=boot-complete.target`, which
-  aktualizr requires) — verified on the SWUpdate image. Yet on the RAUC image,
-  before the fixes, aktualizr did run on the failed trial boot and confirmed it,
-  so the cloud got *success* for a broken update; why it started there is not
-  understood yet (open). The handler check makes completion safe either way.
+  old slot) reports *failed: rolled back*. Normally aktualizr does not start on a
+  failed boot (the health check is `RequiredBy=boot-complete.target`, which
+  aktualizr requires). But stock Torizon's `redboot-auto-reboot` starts it
+  anyway, with `--ignore-dependencies`, when the boot failed and
+  `upgrade_available` is not 1 (*"update not in progress. Device requires
+  intervention!"*), to keep a broken device reachable. That is how the RAUC trial
+  (which did not set the flag) got aktualizr to confirm a broken update and the
+  cloud reported *success*. The check keeps completion safe on that path.
 - **RAUC on U-Boot sets `upgrade_available` too.** greenboot's red path
   (`redboot-auto-reboot`) only reboots when `upgrade_available=1`, so a failed RAUC
   trial was never retried and never rolled back. `rauc_actions.sh` now sets it (and
