@@ -12,6 +12,13 @@ test -n "${BOOT_ORDER}"  || setenv BOOT_ORDER "A B"
 test -n "${BOOT_A_LEFT}" || setenv BOOT_A_LEFT 3
 test -n "${BOOT_B_LEFT}" || setenv BOOT_B_LEFT 0
 
+# The handler also flags a trial in upgrade_available (what greenboot reads to
+# tell an update is in progress), so U-Boot's bootcount runs altbootcmd once the
+# trial has used its attempts. The slot is still chosen below from BOOT_*, so
+# altbootcmd only flags the rollback, like stock Torizon, and boots as usual.
+# (Persisted by the saveenv after slot selection.)
+test -n "${altbootcmd}" || setenv altbootcmd 'setenv rollback 1; run bootcmd'
+
 setenv raucslot
 for slot in ${BOOT_ORDER}; do
   if test -z "${raucslot}"; then

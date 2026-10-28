@@ -89,6 +89,10 @@ set_update_in_progress() {
     has_uboot_env || return 0
     maybe_run fw_setenv upgrade_available "$1"
     maybe_run fw_setenv bootcount 0
+    # A new trial clears the previous rollback flag (as stock aktualizr does).
+    if [ "$1" = "1" ]; then
+        maybe_run fw_setenv rollback 0
+    fi
 }
 
 # --- Actions -----------------------------------------------------------------
