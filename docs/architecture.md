@@ -29,8 +29,8 @@ applies an opaque payload to the inactive slot. The backend is chosen by distro:
 | Action handler | `swupdate_actions.sh` | `rauc_actions.sh` |
 | Slot identity | ext4 FS label `otaroot_a`/`otaroot_b` | GPT PARTLABEL `rootfs_a`/`rootfs_b` |
 | Slot write | SWUpdate raw-write + `e2label` relabel | `rauc install` raw-write (no relabel) |
-| Boot select / rollback | hand-rolled grubenv `bootcount`/`bootlimit` (`wic/grub.cfg`) | RAUC's GRUB backend `ORDER`/`_OK`/`_TRY` (`wic/grub-rauc.cfg`) |
-| WKS | `wic/torizon-ab-x86.wks` | `wic/torizon-ab-rauc-x86.wks` |
+| Boot select / rollback | hand-rolled grubenv `bootcount`/`bootlimit` (`files/wic/grub.cfg`) | RAUC's GRUB backend `ORDER`/`_OK`/`_TRY` (`files/wic/grub-rauc.cfg`) |
+| WKS | `files/wic/torizon-ab-x86.wks` | `files/wic/torizon-ab-rauc-x86.wks` |
 
 Everything **above the seam** is shared: the distro foundation, images,
 persistence, initramfs, data auto-expand, udev slot ignore-list, pending-reboot,
@@ -87,8 +87,8 @@ target at install time; this is added by
 
 ### Partition layout
 Both backends use the same four-partition GPT layout; only the **rootfs-slot
-identity** differs. SWUpdate uses `wic/torizon-ab-x86.wks`; RAUC uses
-`wic/torizon-ab-rauc-x86.wks`.
+identity** differs. SWUpdate uses `files/wic/torizon-ab-x86.wks`; RAUC uses
+`files/wic/torizon-ab-rauc-x86.wks`.
 
 <a name="partition-layout"></a>
 
@@ -126,10 +126,10 @@ mounted it.
 GRUB selects the active slot and implements trial-boot rollback, with greenboot
 confirming health on each boot:
 
-- **SWUpdate** (`wic/grub.cfg`): grubenv `default` + `bootcount`/`bootlimit`/
+- **SWUpdate** (`files/wic/grub.cfg`): grubenv `default` + `bootcount`/`bootlimit`/
   `upgrade_available`; greenboot's green.d hook resets the counter on a healthy
   boot.
-- **RAUC** (`wic/grub-rauc.cfg`): RAUC's GRUB-backend variables `ORDER` +
+- **RAUC** (`files/wic/grub-rauc.cfg`): RAUC's GRUB-backend variables `ORDER` +
   `<bootname>_OK`/`_TRY`; greenboot's green.d hook calls `rauc status mark-good`
   on a healthy boot.
 
@@ -172,7 +172,7 @@ SWUpdate backend
   recipes-support/swupdate/*                   SWUpdate build config
   recipes-sota/config/files/swupdate_actions.sh   the A/B action handler
   recipes-images/swu/*                         .swu producers + sw-description
-  wic/torizon-ab-x86.wks, wic/grub.cfg         A/B layout (ext4 labels) + GRUB counting
+  files/wic/torizon-ab-x86.wks, files/wic/grub.cfg         A/B layout (ext4 labels) + GRUB counting
   recipes-bsp/grub-ab/*                        grubenv bootstrap, rollback reset,
                                                fw_printenv/fw_setenv grubenv wrappers, bootenv.sh
   recipes-bsp/uboot-ab/*                       U-Boot A/B boot script + env (imx8mp)
@@ -182,7 +182,7 @@ RAUC backend
   recipes-support/rauc/files/keyring.pem       dev verification keyring (NOT for production)
   recipes-sota/config/files/rauc_actions.sh    the A/B action handler (rauc install)
   recipes-images/bundle/*                      signed .raucb producer (+ in-tree dev signing keys)
-  wic/torizon-ab-rauc-x86.wks, wic/grub-rauc.cfg  A/B layout (PARTLABEL) + RAUC GRUB bootchooser
+  files/wic/torizon-ab-rauc-x86.wks, files/wic/grub-rauc.cfg  A/B layout (PARTLABEL) + RAUC GRUB bootchooser
   recipes-bsp/rauc-grub-ab/*                   grubenv bootstrap + greenboot `rauc status mark-good`
   recipes-kernel/linux/linux-yocto_%.bbappend  CONFIG_SQUASHFS (+ decompressors, loop)
 ```

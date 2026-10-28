@@ -59,7 +59,7 @@ greenboot health check on B
 
 Two independent layers implement rollback:
 
-1. **GRUB counting** (`wic/grub.cfg`): while `upgrade_available=1`, each boot
+1. **GRUB counting** (`files/wic/grub.cfg`): while `upgrade_available=1`, each boot
    increments `bootcount`; when `bootcount >= bootlimit` GRUB flips `default` to
    the other slot and clears `upgrade_available`.
 2. **greenboot** health checks: on a healthy boot, `grub-ab`'s green.d hook
