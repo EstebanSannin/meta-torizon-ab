@@ -1,0 +1,39 @@
+From: Eduardo Ferreira <eduardo.barbosa@toradex.com>
+Subject: [PATCH] rules: whitelist hd* devices
+
+qemu by default emulates IDE and the linux-yocto kernel(s) use
+CONFIG_IDE instead of the more modern libsata, so disks appear as
+/dev/hd*. Patch rejected upstream because CONFIG_IDE is deprecated.
+
+Rebased onto systemd 259, which added rbd*|zram*|ublkb* to both device
+lists, from meta-torizon-bsp's 0001-rules-whitelist-hd-devices.patch. No
+functional change.
+
+Upstream-Status: Denied [https://github.com/systemd/systemd/pull/1276]
+---
+ rules.d/60-block.rules                 | 2 +-
+ rules.d/60-persistent-storage.rules.in | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+--- a/rules.d/60-block.rules
++++ b/rules.d/60-block.rules
+@@ -9,7 +9,7 @@
+
+ # watch metadata changes, caused by tools closing the device node which was opened for writing
+ ACTION!="remove", SUBSYSTEM=="block", \
+-  KERNEL=="loop*|mmcblk*[0-9]|msblk*[0-9]|mspblk*[0-9]|nvme*|sd*|vd*|xvd*|bcache*|cciss*|dasd*|ubd*|ubi*|scm*|pmem*|nbd*|zd*|rbd*|zram*|ublkb*", \
++  KERNEL=="loop*|mmcblk*[0-9]|msblk*[0-9]|mspblk*[0-9]|nvme*|sd*|vd*|xvd*|bcache*|cciss*|dasd*|ubd*|ubi*|scm*|pmem*|nbd*|zd*|rbd*|zram*|ublkb*|hd*", \
+   OPTIONS+="watch"
+
+ # Reset access rights to each loopback device once it gets detached.
+--- a/rules.d/60-persistent-storage.rules.in
++++ b/rules.d/60-persistent-storage.rules.in
+@@ -7,7 +7,7 @@
+ ENV{UDEV_DISABLE_PERSISTENT_STORAGE_RULES_FLAG}=="1", GOTO="persistent_storage_end"
+
+ SUBSYSTEM!="block|ubi", GOTO="persistent_storage_end"
+-KERNEL!="loop*|mmcblk*[0-9]|msblk*[0-9]|mspblk*[0-9]|nvme*|sd*|sr*|vd*|xvd*|bcache*|cciss*|dasd*|ubd*|ubi*|scm*|pmem*|nbd*|zd*|rbd*|zram*|ublkb*", GOTO="persistent_storage_end"
++KERNEL!="loop*|mmcblk*[0-9]|msblk*[0-9]|mspblk*[0-9]|nvme*|sd*|sr*|vd*|xvd*|bcache*|cciss*|dasd*|ubd*|ubi*|scm*|pmem*|nbd*|zd*|rbd*|zram*|ublkb*|hd*", GOTO="persistent_storage_end"
+
+ # ignore partitions that span the entire disk
+ TEST=="whole_disk", GOTO="persistent_storage_end"
