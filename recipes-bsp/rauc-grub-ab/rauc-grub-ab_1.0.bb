@@ -18,8 +18,10 @@ SRC_URI = " \
     file://00_rauc_mark_good.sh \
 "
 
-# grub-editenv from grub-efi; rauc for mark-good; greenboot for the hook dir.
-RDEPENDS:${PN} = "grub-efi rauc greenboot bash"
+# grub-editenv from grub-efi; rauc for mark-good; greenboot for the hook dir;
+# grubenv-fw-utils so greenboot's red path sees the trial flag the RAUC action
+# handler sets (otherwise a failed trial is never rebooted, so never rolled back).
+RDEPENDS:${PN} = "grub-efi rauc greenboot bash grubenv-fw-utils"
 
 SYSTEMD_SERVICE:${PN} = "grubenv-create.service"
 

@@ -62,9 +62,11 @@ Only two things differ per backend, parameterised in
 RAUC's `grub` backend manages boot selection/rollback via grubenv variables
 (`ORDER`, `<bootname>_OK`, `<bootname>_TRY`) and its documented `grub.cfg`
 bootchooser. The RAUC variant uses this instead of the SWUpdate variant's
-hand-rolled `bootcount`/`bootlimit` counting and the `fw_printenv`/`fw_setenv`
-grubenv wrappers. `rauc-grub-ab` ships the grubenv bootstrap + the reference
-`files/wic/grub-rauc.cfg`.
+hand-rolled `bootcount`/`bootlimit` counting. `rauc-grub-ab` ships the grubenv
+bootstrap + the reference `files/wic/grub-rauc.cfg`. It still pulls in the
+`fw_printenv`/`fw_setenv` grubenv wrappers (`grubenv-fw-utils`), but only so
+greenboot's red path sees the `upgrade_available` trial flag, not for slot
+selection.
 
 *Rationale:* RAUC owns slot state; re-implementing it would fight the tool. This
 also unifies the per-machine bootloader handling the SWUpdate variant hand-rolls

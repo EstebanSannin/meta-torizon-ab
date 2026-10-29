@@ -68,9 +68,9 @@ Two independent layers implement rollback:
    reboots (burning through `bootcount`) until GRUB rolls back.
 
 greenboot's stock scripts use `fw_printenv`/`fw_setenv` (U-Boot). On x86 there is
-no U-Boot, so `grub-ab` ships **grubenv wrappers** named `fw_printenv`/`fw_setenv`
-that operate on `/boot/efi/EFI/BOOT/grubenv`, making greenboot's rollback work
-unchanged.
+no U-Boot, so `grubenv-fw-utils` (pulled in by `grub-ab` and `rauc-grub-ab`)
+ships **grubenv wrappers** named `fw_printenv`/`fw_setenv` that operate on
+`/boot/efi/EFI/BOOT/grubenv`, making greenboot's rollback work unchanged.
 
 > Rollback protects against a bad rootfs **image**. It does not undo bad
 > persistent config in `/etc` (a shared overlay across slots) — see
@@ -172,9 +172,10 @@ reconciliation via `get-firmware-info`, **not** a `sleep`) live in
 
 RAUC's GRUB backend owns the boot-selection/rollback accounting (`ORDER`,
 `<bootname>_OK`, `<bootname>_TRY`), replacing the SWUpdate variant's
-`bootcount`/`bootlimit` logic and the `fw_printenv`/`fw_setenv` grubenv wrappers.
-greenboot remains the health authority; its green.d hook calls
-`rauc status mark-good` instead of resetting a counter.
+`bootcount`/`bootlimit` logic. greenboot remains the health authority; its
+green.d hook calls `rauc status mark-good` instead of resetting a counter. The
+grubenv `fw_printenv`/`fw_setenv` wrappers are still installed, only so that
+greenboot's red path can read the `upgrade_available` trial flag (below).
 
 See [rauc-cloud-test.md](./rauc-cloud-test.md) for the full cloud test runbook
 and [rauc-decisions.md](./rauc-decisions.md) for the design rationale.
@@ -195,11 +196,16 @@ Found and fixed on real hardware during the Torizon OS 8 port (Verdin iMX8MP):
   intervention!"*), to keep a broken device reachable. That is how the RAUC trial
   (which did not set the flag) got aktualizr to confirm a broken update and the
   cloud reported *success*. The check keeps completion safe on that path.
-- **RAUC on U-Boot sets `upgrade_available` too.** greenboot's red path
+- **RAUC sets `upgrade_available` too (U-Boot and x86).** greenboot's red path
   (`redboot-auto-reboot`) only reboots when `upgrade_available=1`, so a failed RAUC
-  trial was never retried and never rolled back. `rauc_actions.sh` now sets it (and
-  resets `bootcount`, clears `rollback`) when arming and clears it once the trial
-  resolves. `BOOT_ORDER`/`BOOT_<slot>_LEFT` still choose the slot.
+  trial was never retried and never rolled back. `rauc_actions.sh` now sets it
+  (and resets `bootcount`; on U-Boot also clears `rollback`) when arming and
+  clears it once the trial resolves. RAUC's own variables still choose the slot
+  (`BOOT_ORDER`/`BOOT_<slot>_LEFT` on U-Boot, `ORDER`/`<slot>_TRY` on GRUB, where
+  one reboot of an unconfirmed trial falls back). On x86 this needs the grubenv
+  `fw_printenv`/`fw_setenv` wrappers, which the RAUC image did not install:
+  `redboot-auto-reboot` hit "fw_printenv: command not found" and left the device
+  on the failed slot (QEMU, Torizon OS 8).
 - **`altbootcmd` must exist.** With `upgrade_available=1` U-Boot counts boots and,
   past `bootlimit`, runs `altbootcmd` instead of `bootcmd`; without it the board
   stops at the U-Boot prompt. Both boot scripts seed it (`setenv rollback 1; run
@@ -208,8 +214,6 @@ Found and fixed on real hardware during the Torizon OS 8 port (Verdin iMX8MP):
   device keeps the boot script it was flashed with.
 - **`fw_printenv NAME` exits 0 and prints `NAME=` for an unset variable**
   (libubootenv), so check values (`fw_printenv -n NAME`), never the exit code.
-- Open: on x86 the RAUC variant has no `fw_printenv`/`fw_setenv`, so greenboot's
-  red path cannot tell an update is in progress there either.
 
 ### Testing rollback and manual slot switch (RAUC)
 

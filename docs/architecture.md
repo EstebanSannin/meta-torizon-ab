@@ -173,8 +173,8 @@ SWUpdate backend
   recipes-sota/config/files/swupdate_actions.sh   the A/B action handler
   recipes-images/swu/*                         .swu producers + sw-description
   files/wic/torizon-ab-x86.wks, files/wic/grub.cfg         A/B layout (ext4 labels) + GRUB counting
-  recipes-bsp/grub-ab/*                        grubenv bootstrap, rollback reset,
-                                               fw_printenv/fw_setenv grubenv wrappers, bootenv.sh
+  recipes-bsp/grub-ab/*                        grubenv bootstrap, rollback reset, bootenv.sh
+  recipes-bsp/grubenv-fw-utils/*               fw_printenv/fw_setenv grubenv wrappers (x86, both backends)
   recipes-bsp/uboot-ab/*                       U-Boot A/B boot script + env (imx8mp)
 
 RAUC backend

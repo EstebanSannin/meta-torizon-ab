@@ -76,20 +76,22 @@ boot_is_unhealthy() {
     systemctl is-failed --quiet greenboot-healthcheck.service
 }
 
-# U-Boot machines: mirror the trial in 'upgrade_available', the flag greenboot's
-# red path (redboot-auto-reboot) and Torizon's U-Boot env cleanup read to tell an
-# update is in progress; RAUC's BOOT_ORDER/BOOT_<slot>_LEFT still choose the
-# slot. Without it a failed trial boot is never retried, so never rolled back.
-has_uboot_env() {
-    [ -r /etc/fw_env.config ] && command -v fw_setenv >/dev/null 2>&1
+# Mirror the trial in 'upgrade_available', the flag greenboot's red path
+# (redboot-auto-reboot) and Torizon's env cleanup read to tell an update is in
+# progress; RAUC's own variables still choose the slot. Without it a failed trial
+# boot is never rebooted, so never rolled back. fw_setenv is the U-Boot tool, or
+# rauc-grub-ab's grubenv wrapper on x86.
+has_bootenv() {
+    command -v fw_setenv >/dev/null 2>&1
 }
 
 # $1: 1 when a trial is armed, 0 once it is resolved
 set_update_in_progress() {
-    has_uboot_env || return 0
+    has_bootenv || return 0
     maybe_run fw_setenv upgrade_available "$1"
     maybe_run fw_setenv bootcount 0
-    if [ "$1" = "1" ]; then
+    # The rest is U-Boot only.
+    if [ "$1" = "1" ] && [ -r /etc/fw_env.config ]; then
         # A new trial clears the previous rollback flag (as stock aktualizr does).
         maybe_run fw_setenv rollback 0
         # Past bootlimit U-Boot runs altbootcmd. The boot script seeds it too, but
