@@ -11,6 +11,35 @@ image booted on the board, confirmed by its version string on the serial log.
 > → serve as a Tezi auto-install feed → recovery-boot Tezi → it flashes eMMC →
 > `reboot -f` → confirm on serial**. Details and every gotcha below.
 
+## 0. Torizon OS 8 rig: Dahlia carrier, no human step (2026-10-29)
+
+The sections below describe the original Yavia/Tezi-feed loop. For Torizon OS 8
+the module (Verdin AM62P Quad 2GB WB IT V1.0B) sits on a **Dahlia V1.1A**, cabled
+to the build host, and flashing needs **no human and no Tezi feed**:
+
+- **Console:** Dahlia FT4232 channel D (`ttyUSB3` on our host) @115200. Channel A
+  is the board-control port used by `dahlia-ctl`.
+- **Power / recovery:** `dahlia-ctl power cycle`, `dahlia-ctl --sdp-vid 0451
+  --sdp-pid 6165 recovery --wait-sdp 20` (TI ROM DFU device `0451:6165`).
+- **Flash:** `dfu-util` loads Tezi's boot stages (`tiboot3-am62px-hs-fs-verdin.bin`
+  → `tispl.bin` → `u-boot.img-recoverytezi`), which end in the Toradex fastboot
+  gadget (`1b67:4000`). `uuu FB:` commands then write the eMMC through U-Boot
+  (fastboot buffer `0x88200000`):
+  - the `.wic` to the user area (`mmc 0`, hw part 0), raw, in 64 MiB chunks;
+  - boot0 (`mmc 0`, hw part 1, 4 MiB = 0x2000 blocks) **erased whole**, because
+    the U-Boot env lives at its end (`ENV_OFFSET=-0x2200`). Then `tiboot3` at
+    block 0, `tispl.bin` at 0x400 and `u-boot.img` at 0x1400 (Tezi's own layout).
+  About 4 minutes for a 4.2 GB wic.
+- **Carrier detection:** Torizon 8's U-Boot reports the Dahlia as "Verdin
+  Development Board" (`fdtfile=…-dev.dtb`); our boot script uses the build-time
+  `TORIZON_AB_FDTFILE` (or the runtime `ab_fdtfile` override) instead.
+- **Warm-reset kernel panic (fixed here):** the BSP's 6.18.32 kernel oopses in the
+  TPS65219 PMIC driver (`irq_data->rdev` never set, CVE-2026-64230) whenever a
+  regulator IRQ is pending, which every warm reset leaves behind: each `reboot`
+  boot-loops until a cold power cycle. `linux-toradex-ti_%.bbappend` carries the
+  upstream fix until the BSP pin includes it. Symptom without it: "Starting
+  kernel ..." straight back to U-Boot SPL; boot with `earlycon` to see the oops.
+
 ---
 
 ## 1. Topology & access
