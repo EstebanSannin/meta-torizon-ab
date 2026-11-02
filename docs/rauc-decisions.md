@@ -134,9 +134,11 @@ support not enabled in kernel" without it).
 On `genericx86-64` (`TORIZON_AB_PACMAN = "rauc"`) the rootfs is no longer a
 generic secondary. The primary uses aktualizr's `rauc` package manager
 (`[pacman] type = "rauc"`, from the `feat/rauc-package-manager` branch of an
-aktualizr fork, not yet upstream), the way stock Torizon uses `ostree`:
+aktualizr fork, not yet upstream, built with `BUILD_RAUC`), the way stock Torizon
+uses `ostree`. It drives the RAUC service through its D-Bus API, not the CLI:
 
-- `install()` runs `rauc install`, records the slot RAUC armed, and returns
+- `install()` calls `InstallBundle` and waits for the `Completed` signal
+  (`LastError` on failure), records the slot RAUC armed (`GetPrimary`), and returns
   "need completion". aktualizr stores the pending update and only then reboots
   through its own path (`70-reboot.toml` → `/run/need-reboot`).
 - After the reboot, `finalizeInstall()` reports success only if the booted slot is
