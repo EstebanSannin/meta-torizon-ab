@@ -129,6 +129,33 @@ added via a `linux-yocto` config fragment scoped to `:torizon-ab-rauc`. This is
 a hard requirement discovered during bring-up (install failed with "squashfs
 support not enabled in kernel" without it).
 
+### D8 — x86: the OS rootfs is the aktualizr primary, installed by a RAUC package manager
+
+On `genericx86-64` (`TORIZON_AB_PACMAN = "rauc"`) the rootfs is no longer a
+generic secondary. The primary uses aktualizr's `rauc` package manager
+(`[pacman] type = "rauc"`, from the `feat/rauc-package-manager` branch of an
+aktualizr fork, not yet upstream), the way stock Torizon uses `ostree`:
+
+- `install()` runs `rauc install`, records the slot RAUC armed, and returns
+  "need completion". aktualizr stores the pending update and only then reboots
+  through its own path (`70-reboot.toml` → `/run/need-reboot`).
+- After the reboot, `finalizeInstall()` reports success only if the booted slot is
+  the recorded one, else "Wrong slot booted" (the bootloader rolled back).
+- The `upgrade_available`/`bootcount` trial flags go through aktualizr's
+  `Bootloader` class (`rollback_mode = "uboot_masked"`, the grubenv `fw_setenv`
+  wrapper on x86), so greenboot's red path reboots a failed trial.
+
+*Consequence:* packages target the machine's hardware id (`genericx86-64`), not
+`<machine>-rootfs`. The reboot race below cannot happen: the pending update is
+stored before aktualizr reboots.
+
+*Validated on QEMU (2026-11-02):* cloud update `Completed`; rollback bundle →
+trial slot fails greenboot → old slot → cloud `success: false`; a hard reset
+right after RAUC finished (before aktualizr stored the pending update) boots the
+new slot, after which aktualizr installs the target once more and completes. That
+extra install is the remaining cost; reporting the booted slot's version would
+avoid it.
+
 ## What stays shared vs. backend-specific
 
 Shared (`:torizon-ab`, verbatim for both): distro foundation (no sota/OSTree),
@@ -150,10 +177,20 @@ RAUC-specific (`:torizon-ab-rauc`): `rauc` + `rauc-conf` (system.conf + keyring)
 - The RAUC handler must set `LOG_ENABLED=1` (as `swupdate_actions.sh` does), or
   `common_actions.sh` never creates `/var/lib/rollback-manager` and the handler
   aborts before `rauc install`.
+- Torizon's **usermount daemon** mounts every new udisks filesystem and ignores
+  both `UDISKS_IGNORE` and `/etc/usermount/ignorelist` (only `usermount-mounter`
+  reads that). On first boot the data-partition resize re-announces the partitions
+  and the daemon mounted the inactive slot, so `rauc install` failed with "Device
+  or resource busy". `rauc_actions.sh` hides it by unmounting first; a RAUC
+  `pre-install` handler cannot (rauc.service runs in its own mount namespace,
+  `MountFlags=slave`). Fixed at the source on x86 (ARM keeps the handler for now):
+  a `usermount` patch skips devices with
+  the `UDISKS_IGNORE` hint, which our slots-udev rule sets.
 
 ## Open items / follow-ups
 
-- **Reboot race → wrong cloud status (under investigation).** The handler
+- **Reboot race → wrong cloud status.** Gone on x86 with the RAUC package
+  manager (D8); still applies to machines on the generic secondary. The handler
   triggers the reboot (`touch /run/need-reboot`) inside the install action, which
   can outrun aktualizr's durable `kPending` write; the device updates correctly
   but aktualizr reports *failed* and never runs `complete-install`. aktualizr

@@ -31,6 +31,8 @@ The `docs/` folder is treated as first-class — **keep it in sync with behavior
   (`[pacman] type = "none"`, download + Uptane-verify only); the OS rootfs is the
   `<machine>-rootfs` secondary; its `action_handler` applies the payload to the
   inactive slot. **Everything above this seam is shared by both backends.**
+  Exception: x86 + RAUC (`TORIZON_AB_PACMAN = "rauc"`) makes the rootfs the
+  primary, installed by aktualizr's RAUC package manager (docs/rauc-decisions.md D8).
 - **Backend axis via `DISTROOVERRIDES`.** Shared foundation in
   `conf/distro/include/torizon-ab-common.inc`; thin distro confs append a token:
   `:torizon-ab` (shared) + `:torizon-ab-swupdate` / `:torizon-ab-rauc` (backend).
