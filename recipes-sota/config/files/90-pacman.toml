@@ -1,4 +1,4 @@
-# Primary package manager: download + Uptane-verify only, no installation.
-# The OS rootfs is applied by SWUpdate via the rootfs generic secondary.
+# Primary package manager (TORIZON_AB_PACMAN). "none" only downloads and
+# Uptane-verifies; the OS rootfs is then applied via the rootfs generic secondary.
 [pacman]
-type = "none"
+type = "@PACMAN@"

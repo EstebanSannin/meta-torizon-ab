@@ -105,7 +105,7 @@ CORE_IMAGE_BASE_INSTALL:append = " \
     rac \
     tzn-mqtt \
     greenboot \
-    aktualizr-pacman-none \
+    aktualizr-pacman \
     torizon-ab-slots-udev \
     torizon-ab-pending-reboot \
     resize-data-helper \

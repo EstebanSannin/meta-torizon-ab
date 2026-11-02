@@ -61,7 +61,7 @@ use the finer `:torizon-ab-swupdate` / `:torizon-ab-rauc` token.
 `recipes-images/images/torizon-ab-base.inc` is a trimmed `torizon-base.inc` (no
 OSTree packages) that explicitly installs the update stack `:sota` would
 otherwise inject — `aktualizr-torizon`, `rac`, `tzn-mqtt`, `auto-provisioning`,
-`greenboot`, `aktualizr-pacman-none`, `torizon-ab-slots-udev`,
+`greenboot`, `aktualizr-pacman`, `torizon-ab-slots-udev`,
 `torizon-ab-pending-reboot`, `resize-data-helper`, `os-release`, and the kernel/initramfs —
 plus the **backend-specific** updater + bootloader glue:
 
@@ -161,8 +161,8 @@ Shared
   recipes-core/udev/*                          keep A/B slots off the automounter (by label + PARTLABEL)
   recipes-support/resize-data-helper/*         grow data partition to fill medium (first boot)
   recipes-support/rollback-test/*              TEST-ONLY failing greenboot check
-  recipes-sota/aktualizr-torizon/*.bbappend    drop OSTree pacman backend
-  recipes-sota/config/aktualizr-pacman-none.bb [pacman] type = none
+  recipes-sota/aktualizr-torizon/*.bbappend    drop OSTree pacman backend; RAUC pacman (fork)
+  recipes-sota/config/aktualizr-pacman.bb      [pacman] type = TORIZON_AB_PACMAN (none, or rauc on x86)
   recipes-sota/config/aktualizr-default-sec.bbappend  rootfs secondary (both backends);
                                                per-backend handler path + payload name;
                                                drop bootloader secondary on x86

@@ -48,21 +48,24 @@ do_install:append:torizon-ab () {
             ;;
     esac
 
-    # Add the '<machine>-rootfs' subsystem secondary (the OS A/B update channel).
-    cat "$secfile" |\
-        jq '.["torizon-generic"] +=
-             [{"partial_verifying": false,
-               "ecu_hardware_id": "'"$machine"'-rootfs",
-               "full_client_dir": "/var/sota/storage/rootfs",
-               "ecu_private_key": "sec.private",
-               "ecu_public_key": "sec.public",
-               "firmware_path": "/var/sota/storage/rootfs/${TORIZON_AB_FW_FILE}",
-               "target_name_path": "/var/sota/storage/rootfs/target_name",
-               "metadata_path": "/var/sota/storage/rootfs/metadata",
-               "action_handler_path": "${TORIZON_AB_UPDATE_HANDLER}"}]' \
-        > ${WORKDIR}/secondaries-ab.json
+    # Add the '<machine>-rootfs' subsystem secondary (the OS A/B update channel),
+    # unless the primary package manager installs the OS rootfs itself.
+    if [ "${TORIZON_AB_PACMAN}" = "none" ]; then
+        cat "$secfile" |\
+            jq '.["torizon-generic"] +=
+                 [{"partial_verifying": false,
+                   "ecu_hardware_id": "'"$machine"'-rootfs",
+                   "full_client_dir": "/var/sota/storage/rootfs",
+                   "ecu_private_key": "sec.private",
+                   "ecu_public_key": "sec.public",
+                   "firmware_path": "/var/sota/storage/rootfs/${TORIZON_AB_FW_FILE}",
+                   "target_name_path": "/var/sota/storage/rootfs/target_name",
+                   "metadata_path": "/var/sota/storage/rootfs/metadata",
+                   "action_handler_path": "${TORIZON_AB_UPDATE_HANDLER}"}]' \
+            > ${WORKDIR}/secondaries-ab.json
 
-    install -m 0644 ${WORKDIR}/secondaries-ab.json "$secfile"
+        install -m 0644 ${WORKDIR}/secondaries-ab.json "$secfile"
+    fi
 }
 
 FILES:${PN}:append:torizon-ab-swupdate = " ${bindir}/swupdate_actions.sh"

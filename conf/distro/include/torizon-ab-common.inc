@@ -21,6 +21,10 @@ DISTROOVERRIDES .= ":torizon-ab"
 # canonical selector for overrides is the DISTROOVERRIDES token above.
 TORIZON_AB_UPDATER ?= "swupdate"
 
+# aktualizr primary package manager. "none" leaves the OS rootfs to the
+# '<machine>-rootfs' generic secondary; "rauc" makes the primary install it.
+TORIZON_AB_PACMAN ?= "none"
+
 # ---------------------------------------------------------------------------
 # Remove every OSTree/TEZI image-assembly class that common-torizon.inc and
 # base-distro.inc pull in, keeping the image pipeline plain (wic + ext4 rootfs).
