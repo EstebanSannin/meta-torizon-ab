@@ -4,4 +4,4 @@
 # the counterpart of the linux-toradex-ti and linux-yocto bbappends. Scoped to
 # the RAUC distro so the SWUpdate variant is unaffected.
 FILESEXTRAPATHS:prepend := "${THISDIR}/files:"
-SRC_URI:append:torizon-ab-rauc = " file://rauc-squashfs.cfg"
+SRC_URI:append:torizon-ab-rauc = " file://rauc.cfg"

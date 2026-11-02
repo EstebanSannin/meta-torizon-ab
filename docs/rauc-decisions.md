@@ -94,13 +94,14 @@ unmount in `rauc_actions.sh`) keeps the inactive slot free.
 The kernel resolves `root=PARTLABEL=` via the stock OE initramfs
 (`initramfs-module-rootfs`), unchanged.
 
-### D5 — Raw ext4 image slot, "plain" bundle, dev keyring (signing is mandatory)
+### D5 — Raw ext4 image slot, "verity" bundle, dev keyring (signing is mandatory)
 
 - Slot type `ext4`, image written raw — the RAUC-standard approach for an A/B
   rootfs (vs a `tar` slot RAUC formats itself). Matches the SWUpdate payload
   shape and needs no relabel given D4.
-- Bundle format **plain** (chosen for first bring-up). `verity` remains the path
-  to casync/delta updates later.
+- Bundle format **verity** (was `plain` for the first bring-up). Needed by the
+  RAUC package manager's `require-manifest-hash` (D8), and the path to streaming
+  and adaptive updates. The kernel needs `CONFIG_DM_VERITY` (`rauc.cfg`).
 - RAUC **requires signed bundles**. A development X.509 key/cert signs the bundle
   (`RAUC_KEY_FILE`/`RAUC_CERT_FILE`) and the self-signed cert is the on-device
   `/usr/lib/rauc/keyring.pem`. This subsumes the SWUpdate variant's optional-signing
@@ -137,12 +138,23 @@ generic secondary. The primary uses aktualizr's `rauc` package manager
 aktualizr fork, not yet upstream, built with `BUILD_RAUC`), the way stock Torizon
 uses `ostree`. It drives the RAUC service through its D-Bus API, not the CLI:
 
-- `install()` calls `InstallBundle` and waits for the `Completed` signal
-  (`LastError` on failure), records the slot RAUC armed (`GetPrimary`), and returns
-  "need completion". aktualizr stores the pending update and only then reboots
-  through its own path (`70-reboot.toml` → `/run/need-reboot`).
-- After the reboot, `finalizeInstall()` reports success only if the booted slot is
-  the recorded one, else "Wrong slot booted" (the bootloader rolled back).
+- A target is identified by its bundle's **manifest hash**, which RAUC records as
+  the `bundle.hash` of the slot it writes. The bundle recipe deploys it next to the
+  bundle (`<bundle>.raucb.manifest-hash`), and publishing attaches it to the package
+  as custom metadata: `PATCH /packages/<id>` with
+  `{"proprietaryMeta": {"rauc": {"manifest-hash": "<hash>"}}}`. It then appears in
+  the signed Image repo `targets.json` as `custom.rauc.manifest-hash`. Targets
+  without it are refused.
+- `install()` calls `InstallBundle` with `require-manifest-hash` and waits for the
+  `Completed` signal (`LastError` on failure), then returns "need completion".
+  aktualizr stores the pending update and only then reboots through its own path
+  (`70-reboot.toml` → `/run/need-reboot`). If the booted slot already holds the
+  target, it reports success without installing.
+- After the reboot, `finalizeInstall()` reports success only if the booted slot
+  holds the target's manifest hash, else "Wrong version booted" (the bootloader
+  rolled back).
+- `getCurrent()` reports what the booted slot holds when it differs from
+  aktualizr's stored version, by looking its hash up in the Image repo metadata.
 - The `upgrade_available`/`bootcount` trial flags go through aktualizr's
   `Bootloader` class (`rollback_mode = "uboot_masked"`, the grubenv `fw_setenv`
   wrapper on x86), so greenboot's red path reboots a failed trial.
@@ -151,12 +163,14 @@ uses `ostree`. It drives the RAUC service through its D-Bus API, not the CLI:
 `<machine>-rootfs`. The reboot race below cannot happen: the pending update is
 stored before aktualizr reboots.
 
-*Validated on QEMU (2026-11-02):* cloud update `Completed`; rollback bundle →
-trial slot fails greenboot → old slot → cloud `success: false`; a hard reset
-right after RAUC finished (before aktualizr stored the pending update) boots the
-new slot, after which aktualizr installs the target once more and completes. That
-extra install is the remaining cost; reporting the booted slot's version would
-avoid it.
+*Validated on QEMU (2026-11-02, verity bundles):* cloud update `Completed`;
+rollback bundle → trial slot fails greenboot → old slot → cloud "Wrong version
+booted"; a package without the manifest hash is refused before RAUC runs; a wrong
+manifest hash is rejected by RAUC ("Refusing to install bundle with unexpected
+hash"), reported to the cloud verbatim; a hard reset right after RAUC finished
+(before aktualizr stored the pending update) boots the new slot, aktualizr
+reports it as running and completes without installing it again. A failed or
+refused install clears the `upgrade_available` trial flag again.
 
 ## What stays shared vs. backend-specific
 

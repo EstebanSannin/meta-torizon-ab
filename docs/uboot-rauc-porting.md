@@ -154,7 +154,7 @@ builds a device-tree kernel), porting is:
    `rauc-conf.bbappend`, and install `rauc-uboot-ab` in `torizon-ab-base.inc`.
    A machine in an **existing** family (another `k3` / i.MX) needs only steps 1–2.
 4. Add the kernel's squashfs config fragment if that kernel recipe isn't already
-   covered (`recipes-kernel/linux/<kernel>_%.bbappend` → `rauc-squashfs.cfg`).
+   covered (`recipes-kernel/linux/<kernel>_%.bbappend` → `rauc.cfg`).
 5. Build-green + static check (no board):
    `DISTRO=torizon-ab-rauc MACHINE=<m> bitbake torizon-minimal-ab torizon-ab-bundle`,
    then verify `boot.scr` has no unsubstituted `@@…@@`, the wic GPT is

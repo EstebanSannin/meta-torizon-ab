@@ -1,7 +1,6 @@
 SUMMARY = "RAUC bundle (.raucb) carrying the Torizon OS A/B rootfs"
 DESCRIPTION = "Packs the torizon-minimal-ab rootfs (ext4) into a signed RAUC \
-bundle. Delivered to devices via the aktualizr '<machine>-rootfs' generic \
-secondary and applied by RAUC (rauc_actions.sh) to the inactive slot."
+bundle, which aktualizr delivers and RAUC applies to the inactive slot."
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 
@@ -14,7 +13,7 @@ SRC_URI = "file://dev.key.pem file://dev.cert.pem"
 RAUC_COMPATIBLE ??= "torizon-ab-rauc-${MACHINE}"
 RAUC_BUNDLE_COMPATIBLE = "${RAUC_COMPATIBLE}"
 RAUC_BUNDLE_VERSION    = "${DISTRO_VERSION}"
-RAUC_BUNDLE_FORMAT     = "plain"
+RAUC_BUNDLE_FORMAT     = "verity"
 
 RAUC_KEY_FILE  = "${UNPACKDIR}/dev.key.pem"
 RAUC_CERT_FILE = "${UNPACKDIR}/dev.cert.pem"
@@ -27,3 +26,16 @@ RAUC_SLOT_rootfs[fstype] = "ext4"
 # Our image recipe overrides IMAGE_LINK_NAME without the ".rootfs" infix that
 # bundle.bbclass expects by default, so point it at the actual deployed name.
 RAUC_SLOT_rootfs[file] = "torizon-minimal-ab-${MACHINE}.ext4"
+
+# Devices identify a bundle by its manifest hash: deploy it next to the bundle,
+# to attach to the package as custom metadata {"rauc": {"manifest-hash": "..."}}.
+do_bundle:append() {
+    ${STAGING_BINDIR_NATIVE}/rauc info --keyring=${RAUC_CERT_FILE} ${B}/bundle.raucb \
+        | sed -n "s/^Manifest Hash: *'\(.*\)'$/\1/p" > ${B}/bundle.manifest-hash
+    [ -s ${B}/bundle.manifest-hash ] || bbfatal "Could not read the bundle manifest hash"
+}
+
+do_deploy:append() {
+    install -m 0644 ${B}/bundle.manifest-hash ${DEPLOYDIR}/${BUNDLE_NAME}${BUNDLE_EXTENSION}.manifest-hash
+    ln -sf ${BUNDLE_NAME}${BUNDLE_EXTENSION}.manifest-hash ${DEPLOYDIR}/${BUNDLE_LINK_NAME}${BUNDLE_EXTENSION}.manifest-hash
+}
