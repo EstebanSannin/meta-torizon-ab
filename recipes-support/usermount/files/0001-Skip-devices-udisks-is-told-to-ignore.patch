@@ -1,0 +1,31 @@
+From a7f7e9b603de505b1b0eed37e7235e99e3a003b9 Mon Sep 17 00:00:00 2001
+From: Stefano Viola <stefano.viola@toradex.com>
+Date: Mon, 2 Nov 2026 22:37:24 +0100
+Subject: [PATCH] Skip devices udisks is told to ignore
+
+Do not mount a block device whose UDISKS_IGNORE hint is set, so udev
+rules can keep partitions such as the inactive rootfs slot of an A/B
+system away from the automounter.
+
+Upstream-Status: Pending
+Signed-off-by: Stefano Viola <stefano.viola@toradex.com>
+---
+ usermount.c | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/usermount.c b/usermount.c
+index 98e4b56..ac2ec86 100644
+--- a/usermount.c
++++ b/usermount.c
+@@ -83,6 +83,11 @@ static void on_object_added(GDBusObjectManager *manager,
+         return;
+     }
+ 
++    if (udisks_block_get_hint_ignore(block)) {
++        fprintf(stderr, "Ignored (UDISKS_IGNORE)\n");
++        return;
++    }
++
+     filesystem = udisks_object_peek_filesystem(object);
+     if (filesystem == NULL) {
+         fprintf(stderr, "Not a mountable filesystem\n");
