@@ -203,7 +203,7 @@ manifest), with the trial flag cleared.
 
 *Keyring validated on QEMU (2026-11-03):* a bundle signed by a key unknown to
 the image is refused without `custom.rauc.keyring` and installs with it, with no
-RAUC restart ([rauc-signing-keys.md](./rauc-signing-keys.md#how-b-works)).
+RAUC restart ([rauc-signing-keys.md](./rauc-signing-keys.md#how-it-works)).
 
 *Streaming caveats:*
 - **Slow on S3.** S3 only speaks HTTP/1.1, so RAUC fetches one range at a time
