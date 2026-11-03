@@ -15,6 +15,6 @@ DEPENDS:remove:torizon-ab = "ostree"
 # RAUC package manager (TORIZON_AB_PACMAN = "rauc", x86 only), not yet upstream.
 SRC_URI:remove:torizon-ab-rauc:genericx86-64 = "gitsm://github.com/toradex/aktualizr.git;protocol=https;branch=toradex-master"
 SRC_URI:prepend:torizon-ab-rauc:genericx86-64 = "gitsm://github.com/EstebanSannin/aktualizr.git;protocol=https;branch=feat/rauc-package-manager "
-SRCREV:torizon-ab-rauc:genericx86-64 = "ade138e02e9f0705cb073d04b4b8cc48cc71463a"
+SRCREV:torizon-ab-rauc:genericx86-64 = "5a297f9de15f43bfec55aa824410a5edc2c88609"
 PACKAGECONFIG[rauc] = "-DBUILD_RAUC=ON,-DBUILD_RAUC=OFF,systemd,"
 PACKAGECONFIG:append:torizon-ab-rauc:genericx86-64 = " rauc"

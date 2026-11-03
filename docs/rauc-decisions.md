@@ -100,8 +100,8 @@ The kernel resolves `root=PARTLABEL=` via the stock OE initramfs
   rootfs (vs a `tar` slot RAUC formats itself). Matches the SWUpdate payload
   shape and needs no relabel given D4.
 - Bundle format **verity** (was `plain` for the first bring-up). Needed by the
-  RAUC package manager's `require-manifest-hash` (D8), and the path to streaming
-  and adaptive updates. The kernel needs `CONFIG_DM_VERITY` (`rauc.cfg`).
+  RAUC package manager's `require-manifest-hash` and streaming (D8), and the path
+  to adaptive updates. The kernel needs `CONFIG_DM_VERITY` (`rauc.cfg`).
 - RAUC **requires signed bundles**. A development X.509 key/cert signs the bundle
   (`RAUC_KEY_FILE`/`RAUC_CERT_FILE`) and the self-signed cert is the on-device
   `/usr/lib/rauc/keyring.pem`. This subsumes the SWUpdate variant's optional-signing
@@ -128,7 +128,9 @@ RAUC bundles are squashfs containers; the target mounts them at install time.
 The kernel therefore needs `CONFIG_SQUASHFS` (+ decompressors + `BLK_DEV_LOOP`),
 added via a `linux-yocto` config fragment scoped to `:torizon-ab-rauc`. This is
 a hard requirement discovered during bring-up (install failed with "squashfs
-support not enabled in kernel" without it).
+support not enabled in kernel" without it). Streaming (D8) adds
+`CONFIG_BLK_DEV_NBD`: RAUC serves the remote bundle to the kernel as an NBD
+device.
 
 ### D8 — x86: the OS rootfs is the aktualizr primary, installed by a RAUC package manager
 
@@ -144,7 +146,20 @@ uses `ostree`. It drives the RAUC service through its D-Bus API, not the CLI:
   as custom metadata: `PATCH /packages/<id>` with
   `{"proprietaryMeta": {"rauc": {"manifest-hash": "<hash>"}}}`. It then appears in
   the signed Image repo `targets.json` as `custom.rauc.manifest-hash`. Targets
-  without it are refused.
+  without it are refused. aktualizr reads it from the Image repo metadata, not
+  from the target merged with the Director's, where the Director's custom
+  metadata wins: with streaming, the hash is all that binds the bundle to the
+  Uptane metadata.
+- Bundles are **streamed**, not downloaded: the fetch step downloads nothing and
+  RAUC reads the bundle over HTTPS while installing, so the device needs no space
+  for a copy. The Torizon reposerver needs the device's TLS client certificate
+  and redirects to a pre-signed S3 URL (valid 24 h) that needs none. aktualizr
+  resolves the redirect with its own TLS client, as it does for generic
+  secondaries, and gives RAUC the pre-signed URL, so RAUC's unprivileged streaming
+  helper (user `nobody`) never needs the device key. RAUC's own `tls-cert`/`tls-key`
+  options are not used: the helper would need to read the key, and one CA file
+  cannot cover both the Torizon gateway (private CA) and S3 (public CA). Offline
+  updates still install from the local copy.
 - `install()` calls `InstallBundle` with `require-manifest-hash` and waits for the
   `Completed` signal (`LastError` on failure), then returns "need completion".
   aktualizr stores the pending update and only then reboots through its own path
@@ -171,6 +186,21 @@ hash"), reported to the cloud verbatim; a hard reset right after RAUC finished
 (before aktualizr stored the pending update) boots the new slot, aktualizr
 reports it as running and completes without installing it again. A failed or
 refused install clears the `upgrade_available` trial flag again.
+
+*Streaming validated on QEMU (2026-11-03):* cloud update `Completed` with
+nothing written to `/var/sota/images`, the booted slot's `bundle.hash` matching
+the build's; a wrong manifest hash is refused within seconds (RAUC reads only the
+manifest), with the trial flag cleared.
+
+*Streaming caveats:*
+- **Slow on S3.** S3 only speaks HTTP/1.1, so RAUC fetches one range at a time
+  (it warns "expect slow installation"). The 1.1 GB full-rootfs bundle took
+  12.5 min to stream (~1.5 MB/s; a lone range request takes ~150 ms) where a
+  plain download on the same link takes ~17 s. RAUC documents HTTP/2 as the remedy (multiplexing);
+  S3 has none, a CDN in front of it (e.g. CloudFront) would. Adaptive updates
+  would cut the data instead.
+- RAUC logs the pre-signed URL, signature included, in its journal (aktualizr
+  keeps it out of its own logs and reports).
 
 ## What stays shared vs. backend-specific
 

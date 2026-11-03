@@ -82,8 +82,9 @@ both `LABEL=` and `PARTLABEL=`, so no initramfs change is needed per backend.
 
 The **RAUC** backend additionally needs `CONFIG_SQUASHFS` (+ decompressors +
 `BLK_DEV_LOOP`) in the kernel, because RAUC mounts the bundle's squashfs on the
-target at install time; this is added by
-`recipes-kernel/linux/linux-yocto_%.bbappend`.
+target at install time, plus `DM_VERITY` for verity bundles and `BLK_DEV_NBD` for
+streaming; these are added by the `rauc.cfg` fragment
+(`recipes-kernel/linux/linux-yocto_%.bbappend`).
 
 ### Partition layout
 Both backends use the same four-partition GPT layout; only the **rootfs-slot
@@ -184,5 +185,5 @@ RAUC backend
   recipes-images/bundle/*                      signed .raucb producer (+ in-tree dev signing keys)
   files/wic/torizon-ab-rauc-x86.wks, files/wic/grub-rauc.cfg  A/B layout (PARTLABEL) + RAUC GRUB bootchooser
   recipes-bsp/rauc-grub-ab/*                   grubenv bootstrap + greenboot `rauc status mark-good`
-  recipes-kernel/linux/linux-yocto_%.bbappend  CONFIG_SQUASHFS (+ decompressors, loop)
+  recipes-kernel/linux/linux-yocto_%.bbappend  rauc.cfg: squashfs (+ decompressors, loop), dm-verity, NBD
 ```
