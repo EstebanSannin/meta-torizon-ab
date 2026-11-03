@@ -437,6 +437,33 @@ torizon-ab-swu` builds ✅; boots slot A on real AM62p; a local + cloud SWUpdate
 applies and rolls back. Until HW-proven, am62p-swupdate is excluded from the
 build-publish weekly matrix.
 
+### B16 — RAUC streaming speed: HTTP/2 or adaptive updates (priority: TBD)
+Found while validating streaming on x86 (2026-11-03, see
+[rauc-decisions.md](./rauc-decisions.md) D8). RAUC streams a bundle with HTTP
+range requests. The Torizon reposerver redirects to S3, which only speaks
+HTTP/1.1, so RAUC has one request in flight at a time and the round-trip time,
+not the bandwidth, sets the pace. RAUC warns "using HTTP/1 for streaming, expect
+slow installation; enable HTTP/2 if possible". Measured on QEMU:
+
+| Same 1.1 GB full-rootfs bundle, same link | Time |
+|---|---|
+| RAUC streaming (HTTP/1.1, ~1.5 MB/s) | 12.5 min |
+| Plain sequential download (~68 MB/s) | ~17 s |
+| One 64 KiB range request | ~150 ms |
+
+Options, not exclusive:
+- **HTTP/2 in front of S3** (cloud side): redirect to a CDN that speaks HTTP/2
+  (e.g. CloudFront signed URLs), which RAUC documents as the remedy (multiplexing,
+  connection reuse). No device change; needs the Torizon Cloud team.
+- **Adaptive updates** (RAUC `adaptive=block-hash-index`): fetch only the blocks
+  that differ from what the device already has. Cuts the data, not the cost per
+  request.
+- **Download instead of stream** (an aktualizr option): as fast as before, at the
+  cost of the space for a copy.
+
+**AC:** a streamed cloud update of the full-rootfs bundle takes about as long as
+downloading it on the same link.
+
 ---
 
 ## Ideas / stretch

@@ -106,7 +106,9 @@ The kernel resolves `root=PARTLABEL=` via the stock OE initramfs
   (`RAUC_KEY_FILE`/`RAUC_CERT_FILE`) and the self-signed cert is the on-device
   `/usr/lib/rauc/keyring.pem`. This subsumes the SWUpdate variant's optional-signing
   follow-up — **production key management is the remaining hardening item**
-  (the in-tree dev keys are NOT for production).
+  (the in-tree dev keys are NOT for production). Options for managing and
+  rotating the keyring, including through Uptane, are in
+  [rauc-signing-keys.md](./rauc-signing-keys.md).
 
 RAUC's system config is delivered through meta-rauc's `virtual-rauc-conf`
 provider: a `rauc-conf.bbappend` writes the templated `/usr/lib/rauc/system.conf`
@@ -235,6 +237,9 @@ RAUC-specific (`:torizon-ab-rauc`): `rauc` + `rauc-conf` (system.conf + keyring)
 
 ## Open items / follow-ups
 
+- **Streaming is slow over HTTP/1.1** (D8): 12.5 min to stream the 1.1 GB
+  bundle from S3 against ~17 s to download it. HTTP/2 in front of S3, adaptive
+  updates, or a download option — tracked as B16 in [roadmap.md](./roadmap.md).
 - **Reboot race → wrong cloud status.** Gone on x86 with the RAUC package
   manager (D8); still applies to machines on the generic secondary. The handler
   triggers the reboot (`touch /run/need-reboot`) inside the install action, which
