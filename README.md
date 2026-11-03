@@ -126,8 +126,9 @@ bitbake torizon-ab-bundle       # its signed .raucb + .raucb.manifest-hash
 
 ## Deploy / update
 
-1. Flash the `.wic` (x86) or the Tezi image (Verdin SoMs) to the device: slot A
-   populated, slot B empty. Boot and provision to Torizon Cloud.
+1. Flash the `.wic` to the device (the Verdin SoMs over USB recovery, see
+   [am62p-hardware-loop.md](./docs/am62p-hardware-loop.md)): slot A populated,
+   slot B empty. Boot and provision to Torizon Cloud.
 2. Publish the update payload to Torizon Cloud:
    - **Generic secondary:** upload the `.swu`/`.raucb` as a **custom "Other"
      package** for hardware id `<machine>-rootfs`, from the web UI (see
