@@ -344,6 +344,8 @@ Candidate requirements to refine (starting point):
 - **Packaging tech:** `.swu` via `swugenerator`/`mkimage` or the existing
   `sw-description` template; `.wic` via wic or a standalone partitioner.
 - **Home:** standalone prototype first vs a TCB output target (productized).
+- **RAUC:** the same need exists for the RAUC backend: customize the rootfs without
+  Yocto and produce a signed verity `.raucb` plus its manifest hash (see B17).
 - **Open questions:** versioning/metadata scheme; how `.wic` and `.swu` share the
   same customized rootfs; secure-boot/signed-image interplay (S2).
 
@@ -463,6 +465,33 @@ Options, not exclusive:
 
 **AC:** a streamed cloud update of the full-rootfs bundle takes about as long as
 downloading it on the same link.
+
+### B17 — Publish RAUC primary packages: a script now, TorizonCore Builder later (priority: TBD)
+With the x86 RAUC package manager ([rauc-decisions.md](./rauc-decisions.md) D8)
+the OS bundle is a package for the **primary**, with hardware ID `<machine>`, not
+`<machine>-rootfs`. The Torizon Cloud web UI cannot upload primary packages; the
+official tool is **TorizonCore Builder** (TCB, `platform push`). Our bundles also
+need their manifest hash attached as custom metadata, which neither the UI nor TCB
+does today:
+`PATCH /packages/<name>-<version>` with
+`{"proprietaryMeta": {"rauc": {"manifest-hash": "<hash>"}}}`, the hash coming from
+`<bundle>.raucb.manifest-hash` in the deploy directory.
+
+Plan:
+1. **Temporary script** in this layer, scripting only: upload a `.raucb` as a
+   primary package (`POST /api/v2/packages?name=&version=&hardwareId=<machine>&targetFormat=BINARY`),
+   attach the manifest hash, optionally launch it to a device and wait for the
+   result. A throwaway prototype did exactly this during the 2026-11-03
+   validation; 1.1 GB bundles uploaded fine through this API.
+2. **Learn what is needed** (versioning, hardware IDs, metadata, signing), then
+   evaluate the changes for TCB, e.g. `platform push` of a `.raucb` that sets the
+   hash itself, and integrate them there. Note that TCB's `platform push` had a
+   multipart-order bug for payloads over 100 MiB, reported to the cloud team.
+3. **Later:** TCB also customizes a system without rebuilding Yocto; evaluate that
+   for RAUC as well (B12).
+
+**AC:** one command publishes a freshly built bundle so that an update launched
+from the web UI delivers it; later, the same through TCB.
 
 ---
 
