@@ -20,6 +20,10 @@ the signing cert shipped with the update (option B). Not implemented yet
   QEMU with RAUC 1.15.2: one `rauc service` process refused a bundle signed by an
   unknown key, accepted its signature once the cert was in the
   `[keyring] directory`, and refused it again once the cert was removed.
+- **So the package manager stays on D-Bus.** `rauc install --keyring=` is no
+  alternative: with the RAUC service running, the CLI refuses `--keyring`
+  ("Reconfigure the service instead"). D-Bus also gives the slot status
+  (installed manifest hashes) that the package manager reports.
 - **Option A still applies to the baked keyring**, which a manual `rauc install`
   uses. It no longer gates the Uptane path.
 
