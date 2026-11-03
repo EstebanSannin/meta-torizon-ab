@@ -1,9 +1,8 @@
 # RAUC bundle-signing keys and Uptane (design)
 
-**Status:** decided 2026-11-03 with the aktualizr owner: **Uptane alone**, with
-the signing cert shipped with the update (option B). Not implemented yet
-(roadmap B18). Phase 4 of the x86 RAUC package manager work
-([rauc-decisions.md](./rauc-decisions.md) D8).
+**Status:** decided 2026-11-03: **Uptane alone**, with the signing cert shipped
+with the update (option B). Not implemented yet (roadmap B18). Phase 4 of the x86
+RAUC package manager work ([rauc-decisions.md](./rauc-decisions.md) D8).
 
 ## Decision
 
