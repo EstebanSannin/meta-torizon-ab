@@ -11,11 +11,10 @@ Legend: **AC** = acceptance criteria.
 
 ## U-Boot RAUC hardware bring-up — two machines, one generalized layer
 
-The RAUC A/B variant is proven end-to-end on **two** physical U-Boot boards from
-**different vendors**, both driven by the same generalized `rauc-uboot-ab` glue —
-each machine supplies only a small per-machine data block in
-`conf/distro/include/torizon-ab-uboot.inc` (the "porting contract", see
-`docs/uboot-rauc-porting.md`). Branch `feature/rauc-ab-am62p`. See
+The A/B variant is proven end-to-end on **two** physical U-Boot boards from
+**different vendors**, with both backends, driven by one shared boot script keyed
+on machine/kernel metadata (see `docs/uboot-rauc-porting.md`, the porting guide).
+It is on `wrynose-8.x.y` (Torizon OS 8) and `scarthgap-7.x.y` (Torizon 7). See
 `docs/am62p-hardware-loop.md` (the build→flash→serial loop is machine-generic;
 only the recovery command differs per family).
 
@@ -32,6 +31,12 @@ data on the generalized layer (fdtfile, `/boot/freescale` DTB dir, eMMC = U-Boot
 (`IMAGE_BOOT_FILES:remove` drops the stock distro `boot.scr` the machine conf
 appends) and a `linux-toradex` squashfs fragment.
 
+**Torizon OS 8 (2026-10-28/29):** both boards re-validated with **both backends**:
+local A→B, cloud update `Completed`, and cloud rollback of an unhealthy image
+(`success: false`, rolled back). The AM62P needed a kernel fix for a panic on
+every warm reboot (TPS65219 PMIC), carried in `linux-toradex-ti_%.bbappend` until
+the BSP pin includes it.
+
 - **Generalization (Done)** — hardcoded am62p glue factored into
   Tier-1 (parameterized `rauc-uboot-ab` + templated `boot.cmd` with runtime
   GPT-label slot resolution + shared wks), Tier-2 (SoC-family scope `:k3` /
@@ -39,10 +44,16 @@ appends) and a `linux-toradex` squashfs fragment.
 - **Automount hardening (Done)** — inactive-slot exclusion works by PARTLABEL +
   defensive unmount (both boards hit the same boot-race automount of the inactive slot).
 - **x86-ism audit fix (Done)** — no-ESP fstab is the default; only x86 mounts the ESP.
-- **Efficiency pass (Todo)** — the imx8mp bring-up hit three bugs (mmc index, stock
-  `boot.scr` clobber, decompress scratch) that all stem from `boot.cmd`
-  reimplementing what the BSP already does per machine; delegate load+boot to the
-  BSP to remove those per-machine axes, and widen the i.MX family scope.
+- **Efficiency pass (Done)** — the imx8mp bring-up hit three bugs (mmc index, stock
+  `boot.scr` clobber, decompress scratch) that all came from hand-kept per-machine
+  boot data. The boot script now only selects the slot and loads the kernel from
+  stable metadata (`KERNEL_IMAGETYPE`, `KERNEL_DTB_PREFIX`, `KERNEL_BOOTCMD`) and
+  the board's U-Boot env (`devnum`, `kernel_comp_addr_r`); the per-machine data
+  block is gone, and both backends share the script. The BSP's own `boot.cmd` was
+  not reused: another team maintains it and it changes without notice. The only
+  per-machine value left is the carrier device tree (`TORIZON_AB_FDTFILE`), as
+  U-Boot's carrier detection proved unreliable. The i.MX family scope is still
+  `mx8mp-generic-bsp`.
 
 ---
 
@@ -66,8 +77,8 @@ flips grubenv, reboots into it; `findmnt /` shows the new slot. ✅
 GRUB `default`/`bootcount`/`bootlimit`/`upgrade_available`; greenboot resets on
 healthy boot; grubenv `fw_printenv`/`fw_setenv` wrappers so greenboot rollback
 works on x86; auto-reboot on `/run/need-reboot`.
-**AC:** manual slot switch works; grubenv trial-exhaustion flips slots. (Full
-greenboot-failure rollback still to validate — see B5.) ✅ (partial)
+**AC:** manual slot switch works; grubenv trial-exhaustion flips slots; a greenboot
+failure rolls back (validated, see B5). ✅
 
 ### D4 — Persistence across slots
 `/etc` overlay (persistent upper on data), `/var` = data partition, `/home`
@@ -96,14 +107,19 @@ both updater backends from the docs. ✅
 ### D8 — RAUC updater backend (`torizon-ab-rauc`)
 A second updater backend in the same layer, selected by distro, sharing
 everything above the aktualizr generic-secondary seam. RAUC applies the OS
-update (`.raucb`) via its native GRUB backend; slots addressed by GPT PARTLABEL.
+update (`.raucb`) via its native GRUB backend (U-Boot backend on the Verdin
+SoMs); slots addressed by GPT PARTLABEL.
 **AC:** `DISTRO=torizon-ab-rauc bitbake torizon-minimal-ab torizon-ab-bundle`
 builds a bootable A/B `.wic` + a signed `.raucb`; QEMU boots slot A; a local
 `rauc install` and a full **Torizon Cloud + aktualizr** update both switch A→B
-with a rollback slot retained. ✅ (validated on genericx86-64/QEMU)
+with a rollback slot retained. ✅ (validated on genericx86-64/QEMU, then on
+Verdin AM62P and iMX8MP hardware, and again on Torizon OS 8)
 See [rauc-decisions.md](./rauc-decisions.md), [rauc-cloud-test.md](./rauc-cloud-test.md).
-Caveat: the cloud update applies correctly on-device but aktualizr may report it
-*failed* due to a reboot race — see **B13**.
+On x86 the rootfs is now installed by aktualizr's RAUC package manager instead of
+the generic secondary, with streamed bundles and the signing cert shipped with the
+update ([rauc-decisions.md](./rauc-decisions.md) D8, B16–B18). The reboot race
+seen on QEMU with the generic secondary (**B13**) did not reproduce on hardware
+and cannot happen with the RAUC package manager.
 
 ### D9 — Fix missing `/etc/os-release`
 The variant dropped the OSTree image classes that generate os-release in stock
@@ -152,9 +168,9 @@ rev, refreshed by a script — not a hand-fork. Multi-vendor scalable: mirrors
 Toradex's new "everything outside BSP" layout `torizon-ab/<vendor>/<channel>.xml`
 with a single shared `overlay.xml` (meta-swupdate + meta-rauc + meta-torizon-ab).
 
-**Status (2026-08-26): DONE — validated end-to-end on m920x.** Separate repo
-`torizon-ab-manifest` (sibling dir; not yet pushed — will go to
-`github.com/EstebanSannin/torizon-ab-manifest`). Upstream pinned to
+**Status (2026-08-26): DONE — validated end-to-end** (Torizon 7; see the
+Torizon OS 8 update below). Separate repo `torizon-ab-manifest`, on GitHub.
+Upstream pinned to
 `scarthgap-7.x.y` @ `c8749217` via `scripts/update-upstream.sh` + `UPSTREAM.env`.
 Channels `release`/`nightly`/`next` (mirroring Toradex's rename of `default.xml`
 → `release.xml`); vendor dirs mirror the new "everything outside BSP" layout
@@ -192,19 +208,34 @@ Validation (all green):
 **Note for publishing:** the raw `.wic` is 13 GB apparent (mostly-empty A/B slots
 + data; see B3 sizing) — publish it **compressed** (`.wic.gz`/`.xz`/`.zst`, tiny
 for a sparse image) so it fits GitHub Releases' 2 GiB cap; the `.raucb` (794 MB)
-already fits. **Remaining before public release:** pin `meta-torizon-ab` to a
-tag/SHA for the release channel; add the Tezi image target (`teziimg`, roadmap B2
-Phase 2) for the flashing feed; then the on-ramp README + push to GitHub.
-(SWUpdate x86 ✅, verdin-am62p RAUC ✅ — arch/backend coverage proven.)
+already fits.
+
+**Torizon OS 8 (2026-10-28/29).** The manifest now follows upstream
+`torizon/manifest` `wrynose-8.x.y` (pinned in `UPSTREAM.env`), with channels
+`release`/`integration`/`next` (`nightly` became `integration`, as upstream) and
+meta-swupdate/meta-rauc pinned to wrynose revisions. Both repos use Torizon's
+branch names: `wrynose-8.x.y` (default) and `scarthgap-7.x.y` (Torizon 7). Its
+README is the `repo init` on-ramp. CI builds all six machine × backend
+combinations from it and publishes the validated ones
+([build-publish-pipeline.md](./build-publish-pipeline.md)).
+
+**Remaining before a public release:** pin `meta-torizon-ab` to a tag/SHA for the
+release channel (it tracks `wrynose-8.x.y` today), and a Tezi image target (B2
+Phase 2); the Verdin boards are flashed with the raw `.wic` over USB recovery.
 
 **AC:** from a clean checkout, `repo init -u <manifest> -b <branch> -m
 torizon-ab/tdx/release.xml && repo sync` then `. setup-environment build &&
 bitbake torizon-ab-swu` produce the image + `.swu` with no manual layer/DISTRO
 edits; revisions pinned for reproducibility; steps captured in the README.
 
-### B2 — Multi-machine: `verdin-imx8mp` (U-Boot) + generalization (In progress)
-Branch: `multi-machine-imx8mp`. Abstract the bootloader/rollback/partition layer
-behind per-machine overrides; add a U-Boot-env rollback path (real `fw_setenv`)
+### B2 — Multi-machine: `verdin-imx8mp` (U-Boot) + generalization (Phase 1 Done)
+**Status:** Phase 1 is done and went further: both Verdin SoMs (imx8mp and am62p)
+run both backends on hardware, on Torizon 7 and Torizon OS 8 (see the U-Boot
+section at the top). Phase 2 (a Tezi image) is still open. The rest of this entry
+is the original plan.
+
+Branch: `multi-machine-imx8mp` (merged). Abstract the
+bootloader/rollback/partition layer behind per-machine overrides; add a U-Boot-env rollback path (real `fw_setenv`)
 and a boot-script A/B selection.
 
 Machine-abstraction done (keeps x86 working):
@@ -230,8 +261,9 @@ rootfs update writes slot B and reboots into it; a failed trial rolls back to A.
 **AC (Phase 2):** a `teziimg` flashes via TEZI and boots to slot A with the full
 update/rollback/persistence flow working.
 
-Open HW-iteration points (draft `boot.cmd`): device/partition scan, load
-addresses, DTB name, and where the board's U-Boot looks for `boot.scr`.
+HW-iteration points of the draft `boot.cmd` (since resolved by the shared boot
+script): device/partition scan, load addresses, DTB name, and where the board's
+U-Boot looks for `boot.scr`.
 x86 remains unaffected throughout.
 
 ### B3 — Production image/slot sizing (priority: TBD)
@@ -243,22 +275,33 @@ still succeeds; documented sizing rationale.
 ### B4 — Signed `.swu` (priority: TBD)
 > Note: the RAUC backend already signs its bundles (mandatory in RAUC); this
 > item is the SWUpdate-side signing. Production key management is a follow-up
-> for both (RAUC currently uses in-tree DEV keys).
+> for both (RAUC currently uses in-tree DEV keys; on x86 the RAUC package manager
+> can take the cert from the update instead, B18).
 Enable SWUpdate image signing (`SWUPDATE_SIGNING`) + on-device verification, in
 addition to aktualizr's Uptane verification.
 **AC:** an unsigned/tampered `.swu` is rejected by SWUpdate; a properly signed
 one installs; keys/process documented.
 
-### B5 — End-to-end rollback validation (both backends) (priority: TBD)
-Use `torizon-ab-rollback-test` to ship a deliberately-unhealthy slot. Neither
-backend has had a full greenboot-driven *rollback event* validated yet (only the
-rollback slot being retained).
+### B5 — End-to-end rollback validation (both backends) (Done)
+Use `torizon-ab-rollback-test` to ship a deliberately-unhealthy slot.
 **AC (SWUpdate):** device boots the bad slot, greenboot fails,
 `redboot-auto-reboot` reboots, and after `bootlimit` GRUB rolls back to the
 previous good slot; the OS update is reported failed in the cloud.
 **AC (RAUC):** same, but rollback is driven by RAUC's GRUB backend
 (`ORDER`/`_OK`/`_TRY`) — the unhealthy slot is never `rauc status mark-good`'d,
 so the next boot falls through `ORDER` to the previous good slot.
+
+**Done (2026-10-28/29, Torizon OS 8):** a cloud update to a
+`torizon-ab-rollback-test` image rolls back to the previous slot and the cloud
+reports it failed, for both backends on Verdin iMX8MP and AM62P hardware and on
+x86 QEMU. On the U-Boot boards the trial runs out after 3 failed boots
+(`bootlimit`), `altbootcmd` returns to the old slot, and the cloud gets
+`success: false`, "rootfs update failed; rolled back". With the x86 RAUC package
+manager the cloud gets "Wrong version booted"
+([rauc-decisions.md](./rauc-decisions.md) D8). This found two real bugs, now
+fixed: aktualizr confirmed an unhealthy trial boot (the cloud got *success*), and
+a failed RAUC trial never rolled back because `upgrade_available` was not set. See
+*Health-gated confirmation* in [updates-and-rollback.md](./updates-and-rollback.md).
 
 ### B6 — Container-app persistence across OS update (priority: TBD)
 **AC:** with a docker-compose app running (see `docs/examples/hello-app`), an OS
@@ -271,6 +314,11 @@ version show meaningfully in the cloud (improve `get-firmware-info`).
 **AC:** the cloud UI shows a sensible installed OS/rootfs version per device;
 re-pushing the same version is recognized as already installed.
 
+On x86 with the RAUC package manager the primary is no longer inert: it reports
+the bundle the booted slot holds, and a target the device already runs completes
+without installing again ([rauc-decisions.md](./rauc-decisions.md) D8). Still open
+for the generic secondary.
+
 ### B8 — Secondary hygiene (priority: TBD)
 Drop the `docker-compose` secondary on the minimal image (no engine); confirm
 the bootloader secondary is cleanly removed on x86.
@@ -282,6 +330,9 @@ Validate the `.swu`/rootfs update via aktualizr's offline (lockbox) path (the
 `offline-updates` PACKAGECONFIG is already built in).
 **AC:** an offline lockbox containing a rootfs `.swu` applies an A→B update with
 no network; rollback still works.
+
+Offline updates through the x86 RAUC package manager, including a cert shipped
+with the update (B18), are untested too.
 
 ### B10 — Repeatable test harness + real-hardware validation (priority: TBD)
 A `docs/testing.md` with the QEMU bring-up + full validation checklist, incl.
@@ -317,6 +368,12 @@ Track/report: `uptane-sign` S3 multipart-completion bug on large `.swu` uploads;
 isn't visible in the container.
 **AC:** internal bug(s) filed with repro; workaround (Web UI upload) documented
 in `docs/updates-and-rollback.md` (done) until fixed.
+
+Multipart bug, root cause found (2026-10-28): the parts reach S3 in descending
+order, which S3 rejects for any payload over one 100 MiB part. The fix belongs in
+the cloud reposerver; a TorizonCore Builder patch that uploads the parts in order
+works as a stopgap. Uploads through the app API (`POST /packages`, B17) are not
+affected.
 
 ### B12 — Define requirements for offline rootfs customization / image tooling (priority: TBD)
 Decide the full feature set of a Yocto-free tool (ideally a TorizonCore Builder
@@ -359,6 +416,13 @@ observed-state reconciliation via `get-firmware-info` (report the booted slot's
 real installed image) — **no `sleep`/timing hacks** (not power-cut safe). Likely
 affects the SWUpdate variant too. Diagnosis in
 [rauc-decisions.md](./rauc-decisions.md) (Open items) + a sequence diagram.
+
+**Status:** not reproduced on hardware (Verdin AM62P and iMX8MP, both backends,
+Torizon 7 and 8: the reboot takes long enough for aktualizr to store the pending
+update first), and it cannot happen on x86 with the RAUC package manager, which
+stores the pending update before it reboots (D8). What remains is defence in depth
+for the generic secondary on fast-rebooting targets and power cuts.
+
 **AC:** after a cloud A→B update the device is on the new slot **and** Torizon
 Cloud shows it installed/succeeded; correct across a power cut at any point.
 
@@ -402,7 +466,7 @@ or a `.swu` to a RAUC ECU (target filtered by HWID, no download attempted); a
 same-machine mixed fleet is independently targetable; docs + pipeline updated to
 the new scheme.
 
-### B15 — Wire the SWUpdate backend for verdin-am62p (K3) (priority: TBD)
+### B15 — Wire the SWUpdate backend for verdin-am62p (K3) (Done)
 Discovered while shaking out the build-publish matrix (2026-08-27): a
 `DISTRO=torizon-ab MACHINE=verdin-am62p` build fails to parse —
 `Nothing RPROVIDES 'torizon-ab-bootenv'`. The am62p SWUpdate combo was never
@@ -431,13 +495,13 @@ A/B script — the exact B15 wiring) → `root=LABEL=otaroot_a` → greenboot �
 This retires the B15 risk (whether uboot-ab boots the A/B layout on K3). The
 SWUpdate *apply* is unchanged from the imx8mp-proven, machine-agnostic handler, so
 a live am62p A→B is confirmatory and will ride in with M2 (cloud OTA per build).
-**Remaining:** merge the branch to main (user; my token can't push meta-torizon-ab),
-then am62p-swupdate re-enters the matrix.
+**Done (2026-10-29, Torizon OS 8):** merged, and validated on Verdin AM62P
+hardware: local A→B, cloud update `Completed`, and cloud rollback. am62p-swupdate
+is in the CI build-and-publish set.
 
 **AC:** `MACHINE=verdin-am62p DISTRO=torizon-ab bitbake torizon-minimal-ab
 torizon-ab-swu` builds ✅; boots slot A on real AM62p; a local + cloud SWUpdate A→B
-applies and rolls back. Until HW-proven, am62p-swupdate is excluded from the
-build-publish weekly matrix.
+applies and rolls back. **Met.**
 
 ### B16 — RAUC streaming speed: HTTP/2 or adaptive updates (priority: TBD)
 Found while validating streaming on x86 (2026-11-03, see
