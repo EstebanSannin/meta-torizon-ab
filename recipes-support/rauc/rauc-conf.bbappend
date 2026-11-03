@@ -40,6 +40,11 @@ do_install:append:torizon-ab-rauc () {
         echo ""
         echo "[keyring]"
         echo "path=${nonarch_libdir}/rauc/${RAUC_KEYRING_FILE}"
+        if [ "${TORIZON_AB_PACMAN}" = "rauc" ]; then
+            echo "# aktualizr's RAUC package manager puts the certificates an update"
+            echo "# carries here while it installs it."
+            echo "directory=/run/rauc/keyring.d"
+        fi
         echo ""
         echo "[slot.rootfs.0]"
         echo "device=/dev/disk/by-partlabel/${TORIZON_AB_PARTLABEL_A}"

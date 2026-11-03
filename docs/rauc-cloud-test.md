@@ -100,6 +100,11 @@ defaults; `--help` lists everything.
   file out of the repository.
 - **Device UUID:** the device's page in the web UI, or
   `GET /devices?nameContains=<device-name>`.
+- **Signing cert:** `--keyring <pem>` attaches the certificates the bundle's
+  signature chains to (`custom.rauc.keyring`), and the device accepts the bundle
+  even if its built-in keyring does not know the key
+  ([rauc-signing-keys.md](./rauc-signing-keys.md)). Without it the bundle must
+  chain to the built-in keyring (today the in-tree dev key).
 - **A new bundle per update.** The version is the build timestamp, and a bundle
   whose manifest hash the booted slot already holds is reported installed without
   installing (D8). To get a new bundle without rootfs changes, rerun the bundle

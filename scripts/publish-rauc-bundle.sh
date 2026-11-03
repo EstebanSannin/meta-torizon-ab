@@ -15,6 +15,8 @@
 #   2. Uploads the bundle: POST /packages?name=&version=&hardwareId=&targetFormat=BINARY.
 #   3. Attaches the manifest hash: PATCH /packages/<id> with
 #      {"proprietaryMeta": {"rauc": {"manifest-hash": "<hash>"}}}, and reads it back.
+#      With --keyring, also the certificates the bundle's signature chains to, as
+#      "keyring": the device installs them in RAUC's keyring for the update.
 #   4. With --launch, launches the package to a device (POST /updates) and waits
 #      for the device's result (GET /updates/devices/<uuid>).
 #
@@ -29,6 +31,9 @@
 #   -n, --name NAME         package name        [torizon-ab-bundle-<machine>]
 #   -v, --version VERSION   package version     [the bundle's timestamp]
 #   -m, --hardware-id ID    primary hardware id [<machine>, from the file name]
+#   -k, --keyring PEM       certificates the bundle's signature chains to (the
+#                           signing cert if self-signed). Without it the device
+#                           checks the bundle against its built-in keyring only.
 #   -l, --launch UUID       launch to this device and wait for the result
 #   -h, --help
 #
@@ -54,13 +59,14 @@ die() { log "publish-rauc-bundle: $*"; exit 1; }
 usage() { sed -n '3,/^$/s/^# \{0,1\}//p' "$0"; exit 0; }
 
 creds=${TORIZON_API_CREDENTIALS:-}
-name='' version='' hwid='' device=''
+name='' version='' hwid='' keyring='' device=''
 while [ $# -gt 0 ]; do
     case "$1" in
         -c|--credentials) creds=${2:?}; shift 2 ;;
         -n|--name)        name=${2:?}; shift 2 ;;
         -v|--version)     version=${2:?}; shift 2 ;;
         -m|--hardware-id) hwid=${2:?}; shift 2 ;;
+        -k|--keyring)     keyring=${2:?}; shift 2 ;;
         -l|--launch)      device=${2:?}; shift 2 ;;
         -h|--help)        usage ;;
         -*)               die "unknown option $1 (see --help)" ;;
@@ -69,6 +75,8 @@ while [ $# -gt 0 ]; do
 done
 [ $# -eq 1 ] || die "usage: publish-rauc-bundle.sh [options] <bundle.raucb> (see --help)"
 [ -z "$device" ] || [[ $device =~ ^[0-9a-f-]{36}$ ]] || die "not a device UUID: $device"
+[ -z "$keyring" ] || grep -q -- '-----BEGIN CERTIFICATE-----' "$keyring" 2>/dev/null \
+    || die "no PEM certificate in $keyring"
 
 # --- Bundle, manifest hash, package coordinates -------------------------------
 [ -f "$1" ] || die "no such bundle: $1"
@@ -149,12 +157,16 @@ api POST "/packages?name=$name&version=$version&hardwareId=$hwid&targetFormat=BI
 id=$(json "$tmp/package" 'd["packageId"]')
 log "Uploaded $id in $((SECONDS - start)) s"
 
-api PATCH "/packages/$id" -H 'Content-Type: application/json' \
-    -d "{\"proprietaryMeta\":{\"rauc\":{\"manifest-hash\":\"$hash\"}}}" > /dev/null
+python3 -c 'import json, sys
+rauc = {"manifest-hash": sys.argv[1]}
+if sys.argv[2]:
+    rauc["keyring"] = open(sys.argv[2]).read()
+print(json.dumps({"proprietaryMeta": {"rauc": rauc}}))' "$hash" "$keyring" > "$tmp/meta"
+api PATCH "/packages/$id" -H 'Content-Type: application/json' --data-binary "@$tmp/meta" > /dev/null
 api GET "/packages/$id" > "$tmp/package"
-[ "$(json "$tmp/package" 'd["proprietaryMeta"]["rauc"]["manifest-hash"]')" = "$hash" ] \
-    || die "$id: the manifest hash did not stick"
-log "Attached manifest hash $hash"
+[ "$(json "$tmp/package" 'd["proprietaryMeta"]["rauc"] == json.load(open(sys.argv[3]))["proprietaryMeta"]["rauc"]' "$tmp/meta")" = True ] \
+    || die "$id: the RAUC metadata did not stick"
+log "Attached manifest hash $hash${keyring:+ and the keyring $keyring}"
 echo "$id"
 
 [ -n "$device" ] || exit 0

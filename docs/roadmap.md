@@ -522,9 +522,14 @@ Work: aktualizr (cert from the Image repo target into the keyring directory, wit
 tests), `system.conf` `[keyring] directory=`, and the publish script (B17)
 attaching the cert.
 
+**Done (2026-11-03):** aktualizr `feat/rauc-package-manager` (`[pacman]`
+`rauc_keyring_dir`, default `/run/rauc/keyring.d`), `rauc-conf.bbappend`, and
+`publish-rauc-bundle.sh --keyring`. Validated on QEMU through the cloud, see
+[rauc-signing-keys.md](./rauc-signing-keys.md#how-b-works).
+
 **AC:** a bundle signed by a key that is not in the image's baked keyring installs
 through the cloud when its package carries the cert, and is refused when it does
-not.
+not. **Met.**
 
 ---
 

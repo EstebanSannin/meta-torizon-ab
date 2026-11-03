@@ -107,9 +107,8 @@ The kernel resolves `root=PARTLABEL=` via the stock OE initramfs
   `/usr/lib/rauc/keyring.pem`. This subsumes the SWUpdate variant's optional-signing
   follow-up — **production key management is the remaining hardening item**
   (the in-tree dev keys are NOT for production). On the Uptane path a bundle is
-  trusted on Uptane alone and its signing cert travels with the update (decided
-  2026-11-03, not implemented yet: roadmap B18); see
-  [rauc-signing-keys.md](./rauc-signing-keys.md).
+  trusted on Uptane alone and its signing cert travels with the update (D8,
+  roadmap B18); see [rauc-signing-keys.md](./rauc-signing-keys.md).
 
 RAUC's system config is delivered through meta-rauc's `virtual-rauc-conf`
 provider: a `rauc-conf.bbappend` writes the templated `/usr/lib/rauc/system.conf`
@@ -168,6 +167,13 @@ uses `ostree`. It drives the RAUC service through its D-Bus API, not the CLI:
   aktualizr stores the pending update and only then reboots through its own path
   (`70-reboot.toml` → `/run/need-reboot`). If the booted slot already holds the
   target, it reports success without installing.
+- RAUC checks every bundle's signature, but on this path a bundle is trusted on
+  Uptane alone. A target may carry the certs its signature chains to
+  (`custom.rauc.keyring`, from the Image repo like the hash); `install()` puts
+  them in RAUC's `[keyring] directory` (`/run/rauc/keyring.d`) for the
+  installation and removes them afterwards. RAUC reads the keyring at every
+  install, so no restart is needed. See
+  [rauc-signing-keys.md](./rauc-signing-keys.md).
 - After the reboot, `finalizeInstall()` reports success only if the booted slot
   holds the target's manifest hash, else "Wrong version booted" (the bootloader
   rolled back).
@@ -194,6 +200,10 @@ refused install clears the `upgrade_available` trial flag again.
 nothing written to `/var/sota/images`, the booted slot's `bundle.hash` matching
 the build's; a wrong manifest hash is refused within seconds (RAUC reads only the
 manifest), with the trial flag cleared.
+
+*Keyring validated on QEMU (2026-11-03):* a bundle signed by a key unknown to
+the image is refused without `custom.rauc.keyring` and installs with it, with no
+RAUC restart ([rauc-signing-keys.md](./rauc-signing-keys.md#how-b-works)).
 
 *Streaming caveats:*
 - **Slow on S3.** S3 only speaks HTTP/1.1, so RAUC fetches one range at a time

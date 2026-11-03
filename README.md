@@ -61,8 +61,8 @@ cloud runbook.
 - [docs/rauc-cloud-test.md](./docs/rauc-cloud-test.md) — RAUC end-to-end cloud
   test runbook (provision → push `.raucb` → aktualizr + RAUC apply → verify).
 - [docs/rauc-signing-keys.md](./docs/rauc-signing-keys.md) — how RAUC's
-  bundle-signing keyring is managed: the cert travels with the update (decided,
-  not implemented yet), and the options considered.
+  bundle-signing keyring is managed: the cert travels with the update, and the
+  options considered.
 - [docs/persistence.md](./docs/persistence.md) — `/etc` overlay + `/home` +
   `/var` design, first-boot seeding, and tradeoffs.
 - [docs/roadmap.md](./docs/roadmap.md) — task backlog with acceptance criteria

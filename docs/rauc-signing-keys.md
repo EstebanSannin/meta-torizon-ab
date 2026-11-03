@@ -1,7 +1,7 @@
 # RAUC bundle-signing keys and Uptane (design)
 
-**Status:** decided 2026-11-03: **Uptane alone**, with the signing cert shipped
-with the update (option B). Not implemented yet (roadmap B18). Phase 4 of the x86
+**Status:** decided and implemented 2026-11-03: **Uptane alone**, with the
+signing cert shipped with the update (option B, roadmap B18). Phase 4 of the x86
 RAUC package manager work ([rauc-decisions.md](./rauc-decisions.md) D8).
 
 ## Decision
@@ -114,23 +114,35 @@ rotated through Uptane, independent of the per-package key.
 | Cloud change | none | none | delegations? | new role |
 | Manual `rauc install` | works | baked keyring only | works | works |
 
-## Implementing B
+## How B works
 
-- **Publish:** `scripts/publish-rauc-bundle.sh` sets `custom.rauc.keyring` (PEM:
-  the signing cert if self-signed, else the root it chains to) in the same
-  `PATCH` as the manifest hash.
-- **aktualizr:** takes the cert from the Image repo target, as it does the hash
-  (the Director's custom metadata wins a merge). It writes the cert as
-  `<subject-hash>.0` (`openssl x509 -hash`) into the keyring directory before
-  `InstallBundle` and removes it afterwards. A target without a cert installs
-  against the baked keyring only.
+- **Publish:** `scripts/publish-rauc-bundle.sh --keyring <pem>` sets
+  `custom.rauc.keyring` (PEM: the signing cert if self-signed, else the root it
+  chains to) in the same `PATCH` as the manifest hash.
+- **aktualizr:** takes the certs from the Image repo target, as it does the hash
+  (the Director's custom metadata wins a merge). It writes each one as
+  `<subject-hash>.<n>` (`openssl x509 -hash`) into the keyring directory before
+  `InstallBundle` and removes the files it wrote afterwards. A target without a
+  cert installs against the baked keyring only. The directory is `[pacman]`
+  `rauc_keyring_dir`, `/run/rauc/keyring.d` by default.
 - **system.conf:** `[keyring] directory=/run/rauc/keyring.d` next to the baked
-  `path=`, the directory created at boot. Nothing in `/run` outlives a reboot.
-- **Offline updates:** the cert comes from the offline metadata, like the hash.
+  `path=` (x86 with the RAUC package manager only). aktualizr creates the
+  directory when it needs it; RAUC does not mind it missing.
+- **Offline updates** (untested): the cert is read like the hash, from the stored
+  Image repo metadata.
 
 A cert from the metadata is enough because the manifest hash fixes the content:
 anyone can re-sign that manifest with another key, but not change what gets
 installed.
+
+*Validated on QEMU through Torizon Cloud (2026-11-03):* a streamed bundle
+re-signed (`rauc resign`) with a key the image's keyring does not know. Published
+without `--keyring`, the device refused it within a second ("signature
+verification failed"), reported to the cloud, with the trial flag cleared and the
+keyring directory not even present. Published with `--keyring`, the cert was in
+the directory during the install (`<subject-hash>.0`), the same RAUC process
+verified the signature, and the update completed: the booted slot holds the
+bundle's manifest hash.
 
 ## Open questions
 
