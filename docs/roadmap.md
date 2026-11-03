@@ -510,6 +510,22 @@ What the script taught for the TCB step:
 **AC:** one command publishes a freshly built bundle so that an update launched
 from the web UI delivers it; later, the same through TCB.
 
+### B18 — Ship the bundle-signing cert with the update (priority: TBD)
+Decided 2026-11-03 ([rauc-signing-keys.md](./rauc-signing-keys.md)): on the
+Uptane path a bundle is trusted on Uptane alone. RAUC still checks every bundle's
+signature, so the package carries the cert its bundle chains to
+(`custom.rauc.keyring`) and the RAUC package manager drops it into RAUC's keyring
+directory around `InstallBundle`. RAUC reads the keyring at each install, so no
+restart is needed (checked on QEMU).
+
+Work: aktualizr (cert from the Image repo target into the keyring directory, with
+tests), `system.conf` `[keyring] directory=`, and the publish script (B17)
+attaching the cert.
+
+**AC:** a bundle signed by a key that is not in the image's baked keyring installs
+through the cloud when its package carries the cert, and is refused when it does
+not.
+
 ---
 
 ## Ideas / stretch

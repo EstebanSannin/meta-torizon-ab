@@ -106,8 +106,9 @@ The kernel resolves `root=PARTLABEL=` via the stock OE initramfs
   (`RAUC_KEY_FILE`/`RAUC_CERT_FILE`) and the self-signed cert is the on-device
   `/usr/lib/rauc/keyring.pem`. This subsumes the SWUpdate variant's optional-signing
   follow-up — **production key management is the remaining hardening item**
-  (the in-tree dev keys are NOT for production). Options for managing and
-  rotating the keyring, including through Uptane, are in
+  (the in-tree dev keys are NOT for production). On the Uptane path a bundle is
+  trusted on Uptane alone and its signing cert travels with the update (decided
+  2026-11-03, not implemented yet: roadmap B18); see
   [rauc-signing-keys.md](./rauc-signing-keys.md).
 
 RAUC's system config is delivered through meta-rauc's `virtual-rauc-conf`

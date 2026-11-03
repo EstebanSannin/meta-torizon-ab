@@ -1,11 +1,29 @@
 # RAUC bundle-signing keys and Uptane (design)
 
-**Status:** proposal, not implemented (2026-11-03). Phase 4 of the x86 RAUC
-package manager work ([rauc-decisions.md](./rauc-decisions.md) D8). Written to
-decide, with the aktualizr and Torizon Cloud owners, how RAUC's trust anchor is
-managed and rotated.
+**Status:** decided 2026-11-03 with the aktualizr owner: **Uptane alone**, with
+the signing cert shipped with the update (option B). Not implemented yet
+(roadmap B18). Phase 4 of the x86 RAUC package manager work
+([rauc-decisions.md](./rauc-decisions.md) D8).
 
-## Where we are
+## Decision
+
+- **Uptane alone.** On the Uptane path a bundle is trusted because the Image repo
+  target names its manifest hash, as an OSTree target is in stock Torizon OS.
+- **The cert travels with the update (option B).** RAUC checks the bundle
+  signature on every install and cannot skip it: `--no-verify` exists only for
+  `info`, `convert`, `resign` and `replace-signature`. So the package carries the
+  cert its bundle chains to, and the package manager puts it in RAUC's keyring
+  before installing.
+- **RAUC reads the keyring at each install, not at service start.** It builds a
+  new X.509 store for every bundle it checks (`setup_x509_store()` in
+  `check_bundle()`); only the keyring paths come from `system.conf`. Checked on
+  QEMU with RAUC 1.15.2: one `rauc service` process refused a bundle signed by an
+  unknown key, accepted its signature once the cert was in the
+  `[keyring] directory`, and refused it again once the cert was removed.
+- **Option A still applies to the baked keyring**, which a manual `rauc install`
+  uses. It no longer gates the Uptane path.
+
+## Before the decision
 
 On the Uptane path, two independent checks stand between a bundle and a slot:
 
@@ -93,20 +111,26 @@ rotated through Uptane, independent of the per-package key.
 | Cloud change | none | none | delegations? | new role |
 | Manual `rauc install` | works | baked keyring only | works | works |
 
-## Recommendation
+## Implementing B
 
-1. **Do A now.** It replaces the dev key, any shipped device needs it whatever we
-   choose next, and it changes neither aktualizr nor the cloud.
-2. **Keep the two-check model as the default.** Adopt B only if the Image repo
-   targets key is held offline. Otherwise it quietly ties RAUC's trust to a key the
-   cloud holds.
-3. **If Uptane-managed rotation is wanted** (to recover from a lost or compromised
-   root), take C to the cloud team: C1 if Torizon Cloud supports delegations with
-   a customer-held offline key today, C2 as the design to upstream.
+- **Publish:** `scripts/publish-rauc-bundle.sh` sets `custom.rauc.keyring` (PEM:
+  the signing cert if self-signed, else the root it chains to) in the same
+  `PATCH` as the manifest hash.
+- **aktualizr:** takes the cert from the Image repo target, as it does the hash
+  (the Director's custom metadata wins a merge). It writes the cert as
+  `<subject-hash>.0` (`openssl x509 -hash`) into the keyring directory before
+  `InstallBundle` and removes it afterwards. A target without a cert installs
+  against the baked keyring only.
+- **system.conf:** `[keyring] directory=/run/rauc/keyring.d` next to the baked
+  `path=`, the directory created at boot. Nothing in `/run` outlives a reboot.
+- **Offline updates:** the cert comes from the offline metadata, like the hash.
+
+A cert from the metadata is enough because the manifest hash fixes the content:
+anyone can re-sign that manifest with another key, but not change what gets
+installed.
 
 ## Open questions
 
-- Product trust model: Uptane alone, or Uptane + RAUC anchor?
-- Torizon Cloud: delegations with customer-held offline keys? Is moving the Image
-  repo targets key offline the production recommendation?
-- Root lifetime and how far ahead to pre-ship its successor (option A).
+- Root lifetime of the baked keyring and how far ahead to pre-ship its successor
+  (option A).
+- Should TorizonCore Builder set the cert when it publishes (roadmap B17)?
