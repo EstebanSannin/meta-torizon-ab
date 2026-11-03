@@ -481,14 +481,31 @@ Plan:
 1. **Temporary script** in this layer, scripting only: upload a `.raucb` as a
    primary package (`POST /api/v2/packages?name=&version=&hardwareId=<machine>&targetFormat=BINARY`),
    attach the manifest hash, optionally launch it to a device and wait for the
-   result. A throwaway prototype did exactly this during the 2026-11-03
-   validation; 1.1 GB bundles uploaded fine through this API.
+   result. **Done (2026-11-03):** `scripts/publish-rauc-bundle.sh`, usage in
+   [rauc-cloud-test.md](./rauc-cloud-test.md#push-the-update--x86-with-the-rauc-package-manager).
+   Validated on QEMU: a freshly built bundle published with its manifest hash
+   in the package's custom metadata, launched with `--launch`, streamed and
+   installed: `Completed`, `success: true`, the new slot holding the bundle's
+   hash. Launching from the web UI is still to try.
 2. **Learn what is needed** (versioning, hardware IDs, metadata, signing), then
    evaluate the changes for TCB, e.g. `platform push` of a `.raucb` that sets the
    hash itself, and integrate them there. Note that TCB's `platform push` had a
    multipart-order bug for payloads over 100 MiB, reported to the cloud team.
 3. **Later:** TCB also customizes a system without rebuilding Yocto; evaluate that
    for RAUC as well (B12).
+
+What the script taught for the TCB step:
+- Coordinates come from the build: hardware id `<machine>` (the primary's), the
+  version from the bundle's build timestamp, the hash from the deploy directory.
+  TCB could read the hash from the bundle itself (`rauc info`) instead.
+- The hash goes on with a second call after the upload, so for a moment the
+  package exists without it. An update launched then is refused by the device
+  (safe, but confusing); TCB should not report the package ready before the hash
+  is on.
+- The app API takes the whole 1.1 GB bundle in one `POST` (~45 s); no multipart,
+  so no part-order bug.
+- An update's `status` is `Completed` even when the device refused or failed the
+  install; `deviceResult.success` is the result.
 
 **AC:** one command publishes a freshly built bundle so that an update launched
 from the web UI delivers it; later, the same through TCB.

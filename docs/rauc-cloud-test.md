@@ -6,6 +6,8 @@ a RAUC bundle as a custom package for the OS rootfs secondary, and let aktualizr
 
 This is the same aktualizr generic-secondary seam as the SWUpdate variant; only
 the handler (`rauc_actions.sh` → `rauc install`) and payload (`.raucb`) differ.
+On x86 with the RAUC package manager the bundle is a **primary** package instead;
+see [Push the update — x86 with the RAUC package manager](#push-the-update--x86-with-the-rauc-package-manager).
 
 ## Build the artifacts
 
@@ -68,6 +70,50 @@ sudo aktualizr-info          # shows the primary + the '<machine>-rootfs' second
    reliable path for large rootfs artifacts — see the cloud-delivery note in
    [updates-and-rollback.md](./updates-and-rollback.md#cloud-delivery-note-both-backends)).
 2. Create/launch an update targeting that secondary for the device.
+
+## Push the update — x86 with the RAUC package manager
+
+On `genericx86-64` with `TORIZON_AB_PACMAN = "rauc"`
+([rauc-decisions.md](./rauc-decisions.md) D8) the bundle is a package for the
+**primary**: hardware id `<machine>` (not `<machine>-rootfs`), with the bundle's
+manifest hash as custom metadata, or the device refuses it. The web UI cannot
+upload primary packages, and neither it nor TorizonCore Builder attaches the hash,
+so until TCB does (roadmap B17) publish with the layer's script:
+
+```sh
+export TORIZON_API_CREDENTIALS=<api-client.json>   # client_id, secret, token_endpoint
+scripts/publish-rauc-bundle.sh ${DEPLOY_DIR_IMAGE}/torizon-ab-bundle-genericx86-64.raucb
+```
+
+It uploads the bundle as package `torizon-ab-bundle-<machine>`, version = the
+bundle's build timestamp (from the file the deploy link points to), attaches
+`{"rauc": {"manifest-hash": "<hash>"}}` from `<bundle>.raucb.manifest-hash`, reads
+it back and prints the package id. Launch an update from the web UI as usual, or
+add `--launch <device-uuid>` to launch it and wait for the device's result (exit 0
+only if it installed). `--name`, `--version` and `--hardware-id` override the
+defaults; `--help` lists everything.
+
+- **Credentials:** an API client created in the Torizon Cloud console, allowed to
+  write packages and updates, as a JSON file (`--credentials` or
+  `TORIZON_API_CREDENTIALS`) or `TORIZON_CLIENT_ID`/`TORIZON_CLIENT_SECRET`. The
+  provisioning and garage-tools clients from `credentials.zip` get 403. Keep the
+  file out of the repository.
+- **Device UUID:** the device's page in the web UI, or
+  `GET /devices?nameContains=<device-name>`.
+- **A new bundle per update.** The version is the build timestamp, and a bundle
+  whose manifest hash the booted slot already holds is reported installed without
+  installing (D8). To get a new bundle without rootfs changes, rerun the bundle
+  task: `bitbake -C bundle torizon-ab-bundle` (new timestamp, new manifest hash).
+- **Read the device result, not the status.** `GET /updates/devices/<uuid>`
+  reports `status: Completed` also for a refused or failed install;
+  `deviceResult.success` tells. The script checks it.
+- **Timing:** the 1.1 GB bundle uploads in under a minute from the build host,
+  in one request; the streamed install takes ~13 min (B16).
+
+*Validated on QEMU (2026-11-03):* a freshly built bundle published with
+`--launch`: uploaded in 44 s, hash attached and read back, streamed and installed
+in 13 min, cloud `Completed` with `success: true`, device `UpToDate`; the booted
+slot's `bundle.hash` is the published manifest hash, the old slot kept as good.
 
 ## Watch it apply (on the device)
 
